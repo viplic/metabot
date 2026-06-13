@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meta Bot Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Meta Bot</p>
+        <h1>Kontrolni panel</h1>
+      </div>
+      <div class="top-actions">
+        <span id="saveStatus" class="status-dot">Nesacuvano</span>
+        <button id="saveButton" class="primary">Sacuvaj</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="tabs" aria-label="Sekcije">
+        <button data-tab="business" class="active">Osnovno</button>
+        <button data-tab="channels">Kanali</button>
+        <button data-tab="automation">Automatizacija</button>
+        <button data-tab="knowledge">Znanje</button>
+        <button data-tab="ai">AI</button>
+        <button data-tab="handoff">Handoff</button>
+        <button data-tab="privacy">Privatnost</button>
+        <button data-tab="test">Test</button>
+      </nav>
+
+      <section class="workspace">
+        <section id="tab-business" class="tab-panel active"></section>
+        <section id="tab-channels" class="tab-panel"></section>
+        <section id="tab-automation" class="tab-panel"></section>
+        <section id="tab-knowledge" class="tab-panel"></section>
+        <section id="tab-ai" class="tab-panel"></section>
+        <section id="tab-handoff" class="tab-panel"></section>
+        <section id="tab-privacy" class="tab-panel"></section>
+        <section id="tab-test" class="tab-panel"></section>
+      </section>
+
+      <aside class="side">
+        <section>
+          <h2>Status</h2>
+          <dl id="statusList"></dl>
+        </section>
+        <section>
+          <h2>Razgovori</h2>
+          <div id="conversationList" class="conversation-list"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

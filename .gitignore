@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/config.json
+data/conversations.json
+data/raw-events.jsonl
+*.log
