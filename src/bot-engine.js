@@ -168,7 +168,7 @@ async function askAiFallback(text, config) {
   try {
     const body = {
       model: config.ai.model,
-      input: [
+      messages: [
         {
           role: "system",
           content: config.ai.systemPrompt
@@ -180,7 +180,7 @@ async function askAiFallback(text, config) {
       ]
     };
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -196,7 +196,7 @@ async function askAiFallback(text, config) {
     const data = await response.json();
     return {
       action: "reply",
-      reply: data.output_text || config.business.defaultReply,
+      reply: data.choices?.[0]?.message?.content || config.business.defaultReply,
       confidence: 0.62,
       reason: "ai_fallback",
       matched: config.ai.model

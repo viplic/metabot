@@ -483,9 +483,9 @@ async function routeMessage(text) {
 
   // 2) LLM fallback — uvek sa try/catch da bot ostane dostupan ako API pukne
   try {
-    const response = await openai.responses.create({
+    const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      input: [
+      messages: [
         {
           role: "system",
           content:
@@ -495,7 +495,7 @@ async function routeMessage(text) {
         { role: "user", content: text },
       ],
     });
-    return response.output_text?.trim() || "Hvala na poruci. Proslediću ovo agentu.";
+    return response.choices?.[0]?.message?.content?.trim() || "Hvala na poruci. Proslediću ovo agentu.";
   } catch (err) {
     console.error("LLM call failed:", err);
     // Graceful degradation — bot ne sme da ućuti
@@ -659,9 +659,9 @@ async def route_message(text: str) -> str:
 
     # 2) LLM fallback — await na AsyncOpenAI (non-blocking!); uvek sa try/except
     try:
-        resp = await client.responses.create(
+        resp = await client.chat.completions.create(
             model="gpt-4o-mini",
-            input=[
+            messages=[
                 {
                     "role": "system",
                     "content": (

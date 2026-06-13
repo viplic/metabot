@@ -19,7 +19,21 @@ document.querySelectorAll(".tabs button").forEach((button) => {
 
 document.querySelector("#saveButton").addEventListener("click", save);
 
-await boot();
+try {
+  await boot();
+} catch (error) {
+  console.error("Boot failed:", error);
+  setSaved("Greska", false, true);
+  document.querySelector(".workspace").innerHTML = `
+    <section class="section" style="border-color: var(--danger); text-align: center; padding: 40px; background: rgba(180, 35, 24, 0.05);">
+      <h2 style="color: var(--danger); margin-bottom: 12px;">Greška pri povezivanju sa serverom</h2>
+      <p style="color: var(--muted); margin-bottom: 24px;">
+        Ne možemo učitati konfiguraciju niti razgovore sa servera. Proverite da li je backend servis pokrenut i pokušajte ponovo.
+      </p>
+      <button onclick="window.location.reload()" class="primary">Pokušaj ponovo</button>
+    </section>
+  `;
+}
 
 async function boot() {
   config = await fetchJson("/api/config");

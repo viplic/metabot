@@ -83,51 +83,55 @@ async function handleWebhookPost(request, response) {
   const payload = JSON.parse(rawBody.toString("utf8"));
   sendJson(response, 200, { ok: true });
 
-  if (config.privacy.storeRawEvents) {
-    await appendRawEvent({
-      receivedAt: new Date().toISOString(),
-      object: payload.object,
-      payload
-    });
-  }
-
-  const incomingEvents = normalizeMetaPayload(payload);
-  if (!incomingEvents.length) return;
-
-  let conversations = pruneExpiredConversations(await loadConversations(), config.privacy.retentionDays);
-
-  for (const incoming of incomingEvents) {
-    const channel = findChannel(config, incoming);
-    if (!channel) continue;
-
-    const conversation = findOrCreateConversation(conversations, incoming);
-    const result = await routeIncomingMessage({
-      text: incoming.text,
-      config,
-      conversation,
-      channelType: channel.type
-    });
-    appendConversationMessages(conversation, incoming.text, result, config);
-    await maybeOpenTicket(config, conversation, incoming, result);
-
-    try {
-      await sendMetaText({
-        config,
-        channel,
-        recipientId: incoming.senderId,
-        text: result.reply
-      });
-    } catch (error) {
-      conversation.audit.push({
-        actor: "meta",
-        action: "send.failed",
-        payload: { message: error.message },
-        createdAt: new Date().toISOString()
+  try {
+    if (config.privacy.storeRawEvents) {
+      await appendRawEvent({
+        receivedAt: new Date().toISOString(),
+        object: payload.object,
+        payload
       });
     }
-  }
 
-  await saveConversations(conversations);
+    const incomingEvents = normalizeMetaPayload(payload);
+    if (!incomingEvents.length) return;
+
+    let conversations = pruneExpiredConversations(await loadConversations(), config.privacy.retentionDays);
+
+    for (const incoming of incomingEvents) {
+      const channel = findChannel(config, incoming);
+      if (!channel) continue;
+
+      const conversation = findOrCreateConversation(conversations, incoming);
+      const result = await routeIncomingMessage({
+        text: incoming.text,
+        config,
+        conversation,
+        channelType: channel.type
+      });
+      appendConversationMessages(conversation, incoming.text, result, config);
+      await maybeOpenTicket(config, conversation, incoming, result);
+
+      try {
+        await sendMetaText({
+          config,
+          channel,
+          recipientId: incoming.senderId,
+          text: result.reply
+        });
+      } catch (error) {
+        conversation.audit.push({
+          actor: "meta",
+          action: "send.failed",
+          payload: { message: error.message },
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    await saveConversations(conversations);
+  } catch (error) {
+    console.error("Error processing webhook payload after response sent:", error);
+  }
 }
 
 async function handleApi(request, response, url) {
