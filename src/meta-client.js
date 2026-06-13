@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { getAppSecret } from "./security.js";
 
 export function normalizeMetaPayload(payload) {
   const events = [];
@@ -6,7 +7,7 @@ export function normalizeMetaPayload(payload) {
 
   for (const entry of entries) {
     for (const event of entry.messaging || []) {
-      const text = event.message?.text || event.postback?.title || "";
+      const text = event.message?.text || event.postback?.payload || event.postback?.title || "";
       if (!event.sender?.id || !text) continue;
       events.push({
         id: event.message?.mid || event.postback?.mid || crypto.randomUUID(),
@@ -54,6 +55,12 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
   const url = new URL(`https://graph.facebook.com/${version}/me/messages`);
   url.searchParams.set("access_token", accessToken);
 
+  const appSecret = getAppSecret(config);
+  if (appSecret) {
+    const appSecretProof = crypto.createHmac("sha256", appSecret).update(accessToken).digest("hex");
+    url.searchParams.set("appsecret_proof", appSecretProof);
+  }
+
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -70,6 +77,49 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
   }
 
   return { skipped: false, response: body ? JSON.parse(body) : {} };
+}
+
+export async function fetchMetaUserProfile({ config, channel, platformUserId }) {
+  const tokenEnv = channel.pageAccessTokenEnv || config.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+  const accessToken = process.env[tokenEnv];
+  if (!accessToken) return null;
+
+  const version = config.meta.graphApiVersion || "v25.0";
+  const url = new URL(`https://graph.facebook.com/${version}/${platformUserId}`);
+  
+  const fields = channel.type === "instagram" ? "name,username,profile_pic" : "first_name,last_name,profile_pic";
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("access_token", accessToken);
+
+  const appSecret = getAppSecret(config);
+  if (appSecret) {
+    const appSecretProof = crypto.createHmac("sha256", appSecret).update(accessToken).digest("hex");
+    url.searchParams.set("appsecret_proof", appSecretProof);
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Meta profile fetch failed: ${response.status} ${await response.text()}`);
+      return null;
+    }
+    const data = await response.json();
+    if (channel.type === "instagram") {
+      return {
+        name: data.name || data.username || "",
+        avatar: data.profile_pic || "",
+        username: data.username || ""
+      };
+    } else {
+      return {
+        name: [data.first_name, data.last_name].filter(Boolean).join(" ") || "",
+        avatar: data.profile_pic || ""
+      };
+    }
+  } catch (error) {
+    console.error("Error fetching Meta user profile:", error);
+    return null;
+  }
 }
 
 export function findChannel(config, incoming) {

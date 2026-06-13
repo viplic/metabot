@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig, saveConfig } from "./config-store.js";
 import { routeIncomingMessage, appendConversationMessages } from "./bot-engine.js";
 import { getAppSecret, getVerifyToken, shouldRequireSignature, verifyMetaSignature } from "./security.js";
-import { findChannel, normalizeMetaPayload, sendMetaText } from "./meta-client.js";
+import { findChannel, normalizeMetaPayload, sendMetaText, fetchMetaUserProfile } from "./meta-client.js";
 import {
   appendRawEvent,
   deleteCustomerData,
@@ -102,6 +102,12 @@ async function handleWebhookPost(request, response) {
       if (!channel) continue;
 
       const conversation = findOrCreateConversation(conversations, incoming);
+      if (!conversation.profile?.name) {
+        const profileInfo = await fetchMetaUserProfile({ config, channel, platformUserId: incoming.senderId });
+        if (profileInfo) {
+          conversation.profile = { ...(conversation.profile || {}), ...profileInfo };
+        }
+      }
       const result = await routeIncomingMessage({
         text: incoming.text,
         config,
