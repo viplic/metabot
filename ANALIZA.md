@@ -734,3 +734,24 @@ Ovaj izveštaj je namerno projektovan za greenfield slučaj. Zbog toga su slede�
 - da li vaša infrastruktura koristi mTLS client cert verification na webhook endpoint-u (relevantno za mTLS trust store ažuriranje).
 
 Najveća praktična ograničenja pri ovakvom projektu nisu tehnička nego operativna: loša baza znanja, nejasna pravila eskalacije, nedostatak ownership-a za ljudsku podršku i nedefinisana pravila čuvanja podataka gotovo uvek kvare rezultat više nego sam izbor framework-a ili LLM-a.
+
+---
+
+## Implementacioni dodatak — stanje lokalnog MVP-a
+
+*(Ažurirano: 15. jun 2026.)*
+
+Lokalni MVP je očvršćen u odnosu na početni skelet:
+
+- `.env` se učitava bez dodatnih npm dependency-ja, uz prioritet već postavljenih sistemskih env vrednosti.
+- Admin konzola i `/api/*` rute su zaključane van localhost-a preko `ADMIN_TOKEN` Basic/Bearer autentifikacije.
+- Webhook signature provera je uključena kao sigurniji default.
+- Dodata je deduplikacija Meta event ID-jeva i serijski webhook queue da lokalni JSON storage ne gubi razgovore pri paralelnim retry zahtevima.
+- Bot blokira automatsko slanje za stare događaje van standardnog 24h prozora i beleži `send.blocked` audit događaj.
+- Raw event storage je isključen po defaultu; ako se uključi, string vrednosti se rediguju kada je `redactLogs` aktivan.
+- Privacy delete briše razgovore i uklanja odgovarajuće raw event zapise.
+- AI fallback koristi OpenAI Responses API (`POST /v1/responses`) sa `store: false`, ograničenim izlazom, niskom temperaturom i stabilnim hashiranim `safety_identifier`.
+- Dodata je lokalna baza znanja koja radi pre AI fallback-a i koristi se kao kontekst za AI odgovor.
+- Dodati su `/api/readiness` i `/api/metrics` za operativnu proveru pre javnog puštanja.
+
+Ovo i dalje nije zamena za produkcioni PostgreSQL/Redis/worker deployment, ali je sada znatno bezbedniji i bliži pravom launch check-u.

@@ -11,7 +11,7 @@
   "meta": {
     "graphApiVersion": "v25.0",
     "verifyToken": "change-this-token",
-    "requireSignature": false,
+    "requireSignature": true,
     "appSecretEnv": "META_APP_SECRET",
     "pageAccessTokenEnv": "META_PAGE_ACCESS_TOKEN"
   },
@@ -41,6 +41,7 @@
     "enabled": true,
     "policyWindowHours": 24,
     "humanAgentWindowDays": 7,
+    "deduplicationWindowHours": 48,
     "confidenceThreshold": 0.72,
     "leadCapturePrompt": "Da bih pomogao agentu, posaljite jos: {field}.",
     "handoffKeywords": ["agent", "operater", "covek", "čovek", "human", "uzivo"],
@@ -103,11 +104,30 @@
   "ai": {
     "enabled": false,
     "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5.5",
     "apiKeyEnv": "OPENAI_API_KEY",
     "maxInputChars": 2000,
+    "maxOutputTokens": 500,
+    "maxContextChars": 4000,
+    "temperature": 0.2,
     "fallbackToHumanOnError": true,
     "systemPrompt": "Ti si bot za korisnicku podrsku. Odgovaraj kratko, tacno i bez izmisljanja. Ako nisi siguran, predlozi razgovor sa agentom."
+  },
+  "knowledge": {
+    "enabled": true,
+    "minScore": 0.35,
+    "autoReplyThreshold": 0.82,
+    "maxMatches": 4,
+    "documents": [
+      {
+        "id": "privacy-basics",
+        "enabled": true,
+        "title": "Privatnost i brisanje podataka",
+        "keywords": ["privatnost", "brisanje", "podaci", "gdpr"],
+        "content": "Korisnik moze zatraziti brisanje podataka. Bot cuva samo podatke potrebne za podrsku i postuje retention podesavanje.",
+        "response": "Mozete zatraziti brisanje podataka. Cuvamo samo podatke potrebne za podrsku i postujemo podeseni rok cuvanja."
+      }
+    ]
   },
   "handoff": {
     "enabled": true,
@@ -122,6 +142,6 @@
   "privacy": {
     "retentionDays": 90,
     "redactLogs": true,
-    "storeRawEvents": true
+    "storeRawEvents": false
   }
 }

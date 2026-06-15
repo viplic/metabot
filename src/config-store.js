@@ -69,8 +69,25 @@ export function normalizeConfig(config) {
   normalized.automation.riskyKeywords = ensureArray(normalized.automation?.riskyKeywords).map(String).filter(Boolean);
   normalized.automation.policyWindowHours = Number(normalized.automation.policyWindowHours || 24);
   normalized.automation.humanAgentWindowDays = Number(normalized.automation.humanAgentWindowDays || 7);
+  normalized.automation.deduplicationWindowHours = Number(normalized.automation.deduplicationWindowHours || 48);
   normalized.automation.confidenceThreshold = clampNumber(normalized.automation.confidenceThreshold ?? 0.72, 0, 1);
   normalized.ai.maxInputChars = Number(normalized.ai.maxInputChars || 2000);
+  normalized.ai.maxOutputTokens = Number(normalized.ai.maxOutputTokens || 500);
+  normalized.ai.maxContextChars = Number(normalized.ai.maxContextChars || 4000);
+  normalized.ai.temperature = clampNumber(normalized.ai.temperature ?? 0.2, 0, 2);
+  normalized.knowledge = normalized.knowledge || {};
+  normalized.knowledge.enabled = normalized.knowledge.enabled !== false;
+  normalized.knowledge.minScore = clampNumber(normalized.knowledge.minScore ?? 0.35, 0, 1);
+  normalized.knowledge.autoReplyThreshold = clampNumber(normalized.knowledge.autoReplyThreshold ?? 0.82, 0, 1);
+  normalized.knowledge.maxMatches = Number(normalized.knowledge.maxMatches || 4);
+  normalized.knowledge.documents = ensureArray(normalized.knowledge.documents).map((document, index) => ({
+    id: document.id || `knowledge-${Date.now()}-${index}`,
+    enabled: document.enabled !== false,
+    title: document.title || `Dokument ${index + 1}`,
+    keywords: ensureArray(document.keywords).map(String).filter(Boolean),
+    content: document.content || "",
+    response: document.response || ""
+  }));
   normalized.privacy.retentionDays = Number(normalized.privacy.retentionDays || 90);
 
   return normalized;

@@ -13,17 +13,26 @@ npm start
 
 3. Otvori `http://localhost:3000`.
 
-Nema obaveznih npm dependency-ja za prvi MVP. Potreban je Node 20+.
+Nema obaveznih npm dependency-ja za prvi MVP. Potreban je Node 20+; za produkciju i CI koristi se Node 24.
+Servis sam ucitava `.env` fajl iz korena projekta, a vrednosti koje su vec postavljene u sistemskom okruzenju imaju prednost.
+
+Ako konzolu izlozis preko javnog tunela, obavezno postavi `ADMIN_TOKEN`. Van localhost-a admin panel i `/api/*` rute su zakljucani Basic/Bearer autentifikacijom.
 
 ## Sta je ukljuceno
 
 - `GET /webhook` za Meta verify handshake.
 - `POST /webhook` za Messenger/Instagram dogadjaje.
 - `X-Hub-Signature-256` provera kada je ukljucena u podesavanjima.
+- Admin autentifikacija preko `ADMIN_TOKEN` za javno izlozenu konzolu.
+- Deduplikacija Meta event ID-jeva da retry ne napravi duple odgovore.
+- Blokada automatskog slanja kada je webhook dogadjaj stariji od Meta 24h prozora.
+- Serijski webhook queue za lokalni JSON storage, da paralelni retry zahtevi ne pregaze razgovore.
+- `/api/readiness` i `/api/metrics` iza admin autentifikacije.
 - Admin panel za poslovne podatke, kanale, pravila, FAQ, lead capture, AI, handoff i privacy.
 - Test simulator poruke bez slanja na Meta API.
 - Lokalni JSON storage za konfiguraciju i razgovore.
-- Opcioni OpenAI fallback preko `OPENAI_API_KEY`.
+- Lokalna baza znanja pre AI fallback-a.
+- Opcioni OpenAI Responses API fallback preko `OPENAI_API_KEY`.
 - Opcioni ticketing webhook preko `TICKETING_WEBHOOK_URL`.
 
 ## Meta podesavanja
@@ -34,7 +43,8 @@ Webhook URL za lokalni razvoj mora biti javno dostupan preko tunela, na primer n
 https://tvoj-tunel.example/webhook
 ```
 
-U Meta App Dashboard-u koristi isti verify token kao `META_VERIFY_TOKEN`. Za produkciju ukljuci signature proveru i postavi `META_REQUIRE_SIGNATURE=true`.
+U Meta App Dashboard-u koristi isti verify token kao `META_VERIFY_TOKEN`. Za produkciju ostavi signature proveru ukljucenu i postavi `META_REQUIRE_SIGNATURE=true`.
+Ako koristis tunel za lokalni razvoj, postavi i `ADMIN_TOKEN`, jer je admin konzola na istom servisu kao webhook.
 
 Minimalne dozvole za Messenger MVP:
 
@@ -51,3 +61,20 @@ Za Instagram Direct preko Page-linked naloga:
 ## Produkcioni sledeci koraci
 
 Ovaj MVP namerno koristi JSON fajlove da bi se brzo proverio tok. Za produkciju prebaci storage na PostgreSQL, dodaj Redis queue za asinhronu obradu, uvedi Secret Manager za tokene i napravi posebne dev/stage/prod Meta aplikacije.
+
+Pre javnog pustanja proveri:
+
+```powershell
+Invoke-RestMethod http://localhost:3000/api/readiness -Headers @{ Authorization = "Bearer $env:ADMIN_TOKEN" }
+```
+
+`ready` treba da bude `true`. Ako nije, endpoint vraca tacne stavke koje nedostaju.
+
+## Docker
+
+```powershell
+docker build -t metabot .
+docker run --env-file .env -p 3000:3000 metabot
+```
+
+Za trajnu produkciju mountuj `data/` ili zameni JSON storage bazom.

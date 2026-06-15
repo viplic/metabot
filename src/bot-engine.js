@@ -1,11 +1,46 @@
 import { redactValue } from "./security.js";
+import { askAiFallback } from "./ai-client.js";
+import { retrieveKnowledge, shouldAutoReplyFromKnowledge } from "./knowledge.js";
 
-export async function routeIncomingMessage({ text, config, conversation, channelType = "messenger" }) {
-  const now = new Date().toISOString();
+export async function routeIncomingMessage({
+  text,
+  config,
+  conversation,
+  channelType = "messenger",
+  eventTimestamp = Date.now()
+}) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const eventDate = resolveEventDate(eventTimestamp, now);
+  const eventIso = eventDate.toISOString();
   const cleanText = String(text || "").trim().slice(0, 4000);
   const profileUpdates = extractProfile(cleanText);
   conversation.profile = { ...(conversation.profile || {}), ...profileUpdates };
-  conversation.lastUserAt = now;
+  conversation.lastUserAt = eventIso;
+  conversation.lastReceivedAt = nowIso;
+
+  const policyDecision = checkMessagingPolicy(config, eventDate, now);
+  if (policyDecision === "outside_human_agent_window") {
+    return decision({
+      action: "policy_expired",
+      reply: "",
+      sendAllowed: false,
+      confidence: 1,
+      reason: "outside_human_agent_window",
+      profileUpdates
+    });
+  }
+
+  if (policyDecision === "outside_policy_window") {
+    return decision({
+      action: config.handoff.enabled ? "handoff" : "policy_blocked",
+      reply: "",
+      sendAllowed: false,
+      confidence: 1,
+      reason: "outside_policy_window",
+      profileUpdates
+    });
+  }
 
   if (!config.automation.enabled) {
     return decision({
@@ -52,6 +87,18 @@ export async function routeIncomingMessage({ text, config, conversation, channel
     });
   }
 
+  const knowledgeMatches = retrieveKnowledge(cleanText, config);
+  if (shouldAutoReplyFromKnowledge(knowledgeMatches[0], config)) {
+    return decision({
+      action: "reply",
+      reply: interpolate(knowledgeMatches[0].answer, { business: config.business, channelType }),
+      confidence: knowledgeMatches[0].score,
+      reason: "knowledge",
+      matched: knowledgeMatches[0].title,
+      profileUpdates
+    });
+  }
+
   const missingField = nextMissingField(config, conversation);
   if (missingField) {
     return decision({
@@ -65,7 +112,12 @@ export async function routeIncomingMessage({ text, config, conversation, channel
   }
 
   if (config.ai.enabled) {
-    const aiDecision = await askAiFallback(cleanText, config);
+    const aiDecision = await askAiFallback({
+      text: cleanText,
+      config,
+      conversation,
+      knowledgeMatches
+    });
     if (aiDecision) {
       return decision({ ...aiDecision, profileUpdates });
     }
@@ -150,74 +202,11 @@ function extractProfile(text) {
   return updates;
 }
 
-async function askAiFallback(text, config) {
-  if (config.ai.provider !== "openai") return null;
-
-  const apiKey = process.env[config.ai.apiKeyEnv || "OPENAI_API_KEY"];
-  if (!apiKey) {
-    return config.ai.fallbackToHumanOnError
-      ? {
-          action: "handoff",
-          reply: config.handoff.message,
-          confidence: 0.2,
-          reason: "missing_ai_api_key"
-        }
-      : null;
-  }
-
-  try {
-    const body = {
-      model: config.ai.model,
-      messages: [
-        {
-          role: "system",
-          content: config.ai.systemPrompt
-        },
-        {
-          role: "user",
-          content: text.slice(0, config.ai.maxInputChars)
-        }
-      ]
-    };
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI error ${response.status}`);
-    }
-
-    const data = await response.json();
-    return {
-      action: "reply",
-      reply: data.choices?.[0]?.message?.content || config.business.defaultReply,
-      confidence: 0.62,
-      reason: "ai_fallback",
-      matched: config.ai.model
-    };
-  } catch (error) {
-    return config.ai.fallbackToHumanOnError
-      ? {
-          action: "handoff",
-          reply: config.handoff.message,
-          confidence: 0.2,
-          reason: "ai_error",
-          matched: error.message
-        }
-      : null;
-  }
-}
-
 function handoffDecision(config, reason, matched, profileUpdates) {
   return decision({
     action: config.handoff.enabled ? "handoff" : "fallback",
     reply: config.handoff.enabled ? config.handoff.message : config.business.defaultReply,
+    sendAllowed: true,
     confidence: 1,
     reason,
     matched,
@@ -232,7 +221,9 @@ function decision(payload) {
     confidence: payload.confidence,
     reason: payload.reason,
     matched: payload.matched || null,
-    profileUpdates: payload.profileUpdates || {}
+    profileUpdates: payload.profileUpdates || {},
+    sendAllowed: payload.sendAllowed !== false,
+    aiResponseId: payload.aiResponseId || null
   };
 }
 
@@ -250,20 +241,26 @@ export function appendConversationMessages(conversation, incomingText, result, c
     body: redactValue(incomingText, redact),
     createdAt: now
   });
-  conversation.messages.push({
-    sender: "bot",
-    body: redactValue(result.reply, redact),
-    action: result.action,
-    confidence: result.confidence,
-    reason: result.reason,
-    matched: result.matched,
-    createdAt: now
-  });
-  conversation.lastBotAt = now;
+
+  if (result.sendAllowed !== false && result.reply) {
+    conversation.messages.push({
+      sender: "bot",
+      body: redactValue(result.reply, redact),
+      action: result.action,
+      confidence: result.confidence,
+      reason: result.reason,
+      matched: result.matched,
+      aiResponseId: result.aiResponseId,
+      createdAt: now
+    });
+    conversation.lastBotAt = now;
+  }
 
   if (result.action === "handoff") {
     conversation.humanHandoff = true;
     conversation.status = "handoff";
+  } else if (result.action === "policy_expired") {
+    conversation.status = "policy_expired";
   }
 
   conversation.audit.push({
@@ -272,8 +269,38 @@ export function appendConversationMessages(conversation, incomingText, result, c
     payload: {
       confidence: result.confidence,
       reason: result.reason,
-      matched: result.matched
+      matched: result.matched,
+      aiResponseId: result.aiResponseId,
+      sendAllowed: result.sendAllowed !== false
     },
     createdAt: now
   });
+}
+
+function checkMessagingPolicy(config, eventDate, now) {
+  const policyHours = Number(config.automation?.policyWindowHours || 24);
+  const humanDays = Number(config.automation?.humanAgentWindowDays || 7);
+  const eventAgeMs = now.getTime() - eventDate.getTime();
+
+  if (eventAgeMs < 0 || policyHours <= 0) return "inside_policy_window";
+  if (eventAgeMs <= policyHours * 60 * 60 * 1000) return "inside_policy_window";
+  if (humanDays > 0 && eventAgeMs <= humanDays * 24 * 60 * 60 * 1000) {
+    return "outside_policy_window";
+  }
+  return "outside_human_agent_window";
+}
+
+function resolveEventDate(value, fallbackDate) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const milliseconds = numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+    const date = new Date(milliseconds);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const parsed = Date.parse(value);
+  if (!Number.isNaN(parsed)) return new Date(parsed);
+  return fallbackDate;
 }

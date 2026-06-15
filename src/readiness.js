@@ -1,0 +1,54 @@
+import { getAdminToken, getAppSecret, getVerifyToken, shouldRequireSignature } from "./security.js";
+
+export function evaluateReadiness(config) {
+  const checks = [];
+  const adminToken = getAdminToken();
+  const appSecret = getAppSecret(config);
+
+  checks.push(check("admin_token", isRealSecret(adminToken, "change-this-admin-token"), "ADMIN_TOKEN is required before public exposure."));
+  checks.push(check("graph_api_version", /^v\d+\.\d+$/.test(config.meta.graphApiVersion || ""), "Graph API version must be pinned, e.g. v25.0."));
+  checks.push(check("verify_token", getVerifyToken(config) !== "change-this-token", "META_VERIFY_TOKEN must be changed."));
+  checks.push(check("webhook_signature", shouldRequireSignature(config), "META_REQUIRE_SIGNATURE should be true."));
+  checks.push(check("app_secret", !shouldRequireSignature(config) || isRealSecret(appSecret, "change-this-app-secret"), "META_APP_SECRET is required for webhook signature verification."));
+  checks.push(check("privacy_url", Boolean(config.business.privacyNoticeUrl), "Privacy notice URL is required for launch."));
+  checks.push(check("data_deletion_url", Boolean(config.business.dataDeletionUrl), "Data deletion URL/callback is required for launch."));
+  checks.push(check("channels", config.channels.some((channel) => channel.enabled), "At least one channel must be enabled."));
+
+  for (const channel of config.channels.filter((item) => item.enabled && item.sendEnabled)) {
+    const tokenEnv = channel.pageAccessTokenEnv || config.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+    checks.push(check(`channel_token_${channel.id}`, isRealSecret(process.env[tokenEnv], "page-token-for-sending"), `${tokenEnv} is required for sending on ${channel.name}.`));
+  }
+
+  if (config.ai.enabled) {
+    const apiKeyEnv = config.ai.apiKeyEnv || "OPENAI_API_KEY";
+    checks.push(check("ai_api_key", isRealSecret(process.env[apiKeyEnv]), `${apiKeyEnv} is required when AI fallback is enabled.`));
+    checks.push(check("ai_responses_model", Boolean(config.ai.model), "AI model must be configured."));
+  }
+
+  if (config.handoff.ticketing.enabled) {
+    const webhookEnv = config.handoff.ticketing.webhookUrlEnv || "TICKETING_WEBHOOK_URL";
+    checks.push(check("ticketing_webhook", isRealSecret(process.env[webhookEnv]), `${webhookEnv} is required when ticketing webhook is enabled.`));
+  }
+
+  checks.push(check("retention", Number(config.privacy.retentionDays) > 0, "Retention must be a positive number of days."));
+  checks.push(check("raw_event_privacy", !config.privacy.storeRawEvents || config.privacy.redactLogs, "Raw event storage should be paired with log redaction."));
+
+  const failed = checks.filter((item) => !item.ok);
+  return {
+    ready: failed.length === 0,
+    checks,
+    failed
+  };
+}
+
+function check(id, ok, message) {
+  return { id, ok: Boolean(ok), message };
+}
+
+function isRealSecret(value, placeholder = "") {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (placeholder && text === placeholder) return false;
+  if (/^change-this/i.test(text)) return false;
+  return true;
+}

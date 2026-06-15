@@ -149,6 +149,7 @@ function renderAutomation() {
       ${checkboxField("Bot aktivan", config.automation.enabled, (value) => (config.automation.enabled = value))}
       ${numberField("24h prozor", config.automation.policyWindowHours, (value) => (config.automation.policyWindowHours = Number(value)))}
       ${numberField("Human agent dani", config.automation.humanAgentWindowDays, (value) => (config.automation.humanAgentWindowDays = Number(value)))}
+      ${numberField("Dedup sati", config.automation.deduplicationWindowHours, (value) => (config.automation.deduplicationWindowHours = Number(value)))}
       ${numberField("FAQ prag", config.automation.confidenceThreshold, (value) => (config.automation.confidenceThreshold = Number(value)), 0, 1, 0.01)}
       ${textArea("Lead prompt", config.automation.leadCapturePrompt, (value) => (config.automation.leadCapturePrompt = value), "full")}
     </div>`
@@ -219,9 +220,24 @@ function fieldItem(field) {
 
 function renderKnowledge() {
   panels.knowledge.innerHTML = section(
+    "Baza znanja",
+    `<div class="grid three">
+      ${checkboxField("Ukljucena", config.knowledge.enabled, (value) => (config.knowledge.enabled = value))}
+      ${numberField("Min skor", config.knowledge.minScore, (value) => (config.knowledge.minScore = Number(value)), 0, 1, 0.01)}
+      ${numberField("Auto odgovor skor", config.knowledge.autoReplyThreshold, (value) => (config.knowledge.autoReplyThreshold = Number(value)), 0, 1, 0.01)}
+      ${numberField("Max izvora", config.knowledge.maxMatches, (value) => (config.knowledge.maxMatches = Number(value)))}
+    </div>
+    <div class="collection">${config.knowledge.documents.map(knowledgeDocumentItem).join("")}</div>
+    <div class="actions"><button id="addKnowledgeDocument">Dodaj dokument</button></div>`
+  );
+
+  panels.knowledge.insertAdjacentHTML(
+    "beforeend",
+    section(
     "Pravila",
     `<div class="collection">${config.automation.rules.map(ruleItem).join("")}</div>
     <div class="actions"><button id="addRule">Dodaj pravilo</button></div>`
+    )
   );
 
   panels.knowledge.insertAdjacentHTML(
@@ -234,6 +250,18 @@ function renderKnowledge() {
   );
 
   bindInputs(panels.knowledge);
+  panels.knowledge.querySelector("#addKnowledgeDocument").addEventListener("click", () => {
+    config.knowledge.documents.push({
+      id: `knowledge-${Date.now()}`,
+      enabled: true,
+      title: "Novi dokument",
+      keywords: ["kljucna rec"],
+      content: "Sadrzaj baze znanja",
+      response: ""
+    });
+    markDirty();
+    renderKnowledge();
+  });
   panels.knowledge.querySelector("#addRule").addEventListener("click", () => {
     config.automation.rules.push({
       id: `rule-${Date.now()}`,
@@ -271,6 +299,30 @@ function renderKnowledge() {
       renderKnowledge();
     });
   });
+  panels.knowledge.querySelectorAll("[data-remove-knowledge]").forEach((button) => {
+    button.addEventListener("click", () => {
+      config.knowledge.documents = config.knowledge.documents.filter((document) => document.id !== button.dataset.removeKnowledge);
+      markDirty();
+      renderKnowledge();
+    });
+  });
+}
+
+function knowledgeDocumentItem(document) {
+  return `<article class="item">
+    <div class="item-header">
+      <h3>${escapeHtml(document.title)}</h3>
+      <button class="danger" data-remove-knowledge="${document.id}">Ukloni</button>
+    </div>
+    <div class="grid">
+      ${checkboxField("Aktivno", document.enabled, (value) => (document.enabled = value))}
+      ${textField("ID", document.id, (value) => (document.id = slug(value)))}
+      ${textField("Naslov", document.title, (value) => (document.title = value))}
+      ${textField("Kljucne reci", document.keywords.join(", "), (value) => (document.keywords = splitCsv(value)))}
+      ${textArea("Sadrzaj", document.content, (value) => (document.content = value), "full")}
+      ${textArea("Direktan odgovor", document.response, (value) => (document.response = value), "full")}
+    </div>
+  </article>`;
 }
 
 function ruleItem(rule) {
@@ -313,6 +365,9 @@ function renderAi() {
       ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
       ${textField("API key env", config.ai.apiKeyEnv, (value) => (config.ai.apiKeyEnv = value))}
       ${numberField("Max karaktera", config.ai.maxInputChars, (value) => (config.ai.maxInputChars = Number(value)))}
+      ${numberField("Max izlaz tokena", config.ai.maxOutputTokens, (value) => (config.ai.maxOutputTokens = Number(value)))}
+      ${numberField("Max kontekst", config.ai.maxContextChars, (value) => (config.ai.maxContextChars = Number(value)))}
+      ${numberField("Temperatura", config.ai.temperature, (value) => (config.ai.temperature = Number(value)), 0, 2, 0.1)}
       ${checkboxField("Greska vodi na handoff", config.ai.fallbackToHumanOnError, (value) => (config.ai.fallbackToHumanOnError = value))}
       ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
     </div>`
@@ -358,7 +413,7 @@ function renderPrivacy() {
     });
     conversations = await fetchJson("/api/conversations");
     renderSidebar();
-    setSaved(`Obrisano: ${result.deleted}`, true);
+    setSaved(`Obrisano: ${result.deleted} / raw ${result.rawEventsDeleted}`, true);
   });
 }
 
@@ -402,10 +457,12 @@ function renderSidebar() {
   const activeChannels = config.channels.filter((channel) => channel.enabled).length;
   const rules = config.automation.rules.filter((rule) => rule.enabled).length;
   const faqs = config.automation.faqs.filter((faq) => faq.enabled).length;
+  const knowledge = config.knowledge.documents.filter((document) => document.enabled).length;
   document.querySelector("#statusList").innerHTML = `
     <dt>Kanali</dt><dd>${activeChannels}</dd>
     <dt>Pravila</dt><dd>${rules}</dd>
     <dt>FAQ</dt><dd>${faqs}</dd>
+    <dt>Znanje</dt><dd>${knowledge}</dd>
     <dt>AI</dt><dd>${config.ai.enabled ? "on" : "off"}</dd>
     <dt>Handoff</dt><dd>${config.handoff.enabled ? "on" : "off"}</dd>
   `;

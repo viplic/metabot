@@ -128,6 +128,15 @@ export function findChannel(config, incoming) {
   );
   if (exactPage) return exactPage;
 
+  const exactInstagram = config.channels.find(
+    (channel) =>
+      channel.enabled &&
+      channel.type === "instagram" &&
+      channel.igAccountId &&
+      (channel.igAccountId === incoming.pageId || channel.igAccountId === incoming.recipientId)
+  );
+  if (exactInstagram) return exactInstagram;
+
   const byType = config.channels.find((channel) => channel.enabled && channel.type === incoming.channelType);
   return byType || config.channels.find((channel) => channel.enabled) || null;
 }

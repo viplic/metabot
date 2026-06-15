@@ -1,7 +1,8 @@
-node_modules/
+.git
 .env
 data/config.json
 data/conversations.json
 data/raw-events.jsonl
 data/processed-events.json
+node_modules
 *.log
