@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "data");
-const DEFAULT_CONFIG_PATH = path.join(DATA_DIR, "default-config.json");
+const DEFAULT_CONFIG_PATH = path.resolve("data/default-config.json");
 const CONFIG_PATH = path.join(DATA_DIR, "config.json");
 const TENANTS_PATH = path.join(DATA_DIR, "tenants.json");
 const TENANT_CONFIG_DIR = path.join(DATA_DIR, "tenants");
