@@ -46,6 +46,10 @@ export function getAdminUsername() {
   return process.env.ADMIN_USERNAME || "admin";
 }
 
+export function adminSessionValue(token = getAdminToken()) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
 export function isLocalHost(hostHeader = "") {
   const rawHost = String(hostHeader).toLowerCase();
   let host = rawHost;
@@ -66,6 +70,11 @@ export function verifyAdminAuth(headers = {}) {
 
   const header = getHeader(headers, "authorization");
   const suppliedToken = getHeader(headers, "x-admin-token");
+  const cookieToken = getCookie(headers, "nibachat_admin");
+  if (cookieToken && safeStringEqual(cookieToken, adminSessionValue(token))) {
+    return { ok: true, mode: "cookie" };
+  }
+
   if (suppliedToken && safeStringEqual(suppliedToken, token)) {
     return { ok: true, mode: "token" };
   }
@@ -96,6 +105,20 @@ function getHeader(headers, name) {
   const lowerName = name.toLowerCase();
   for (const [key, value] of Object.entries(headers || {})) {
     if (key.toLowerCase() === lowerName) return Array.isArray(value) ? value[0] : value;
+  }
+  return "";
+}
+
+function getCookie(headers, name) {
+  const cookieHeader = getHeader(headers, "cookie");
+  if (!cookieHeader) return "";
+  const cookies = String(cookieHeader).split(";").map((item) => item.trim());
+  for (const cookie of cookies) {
+    const separator = cookie.indexOf("=");
+    if (separator < 0) continue;
+    const key = cookie.slice(0, separator);
+    const value = cookie.slice(separator + 1);
+    if (key === name) return decodeURIComponent(value);
   }
   return "";
 }

@@ -7,7 +7,7 @@ import { loadConfig } from "../src/config-store.js";
 import { routeIncomingMessage } from "../src/bot-engine.js";
 import { selectOpenAiModel } from "../src/ai-client.js";
 import { parseEnvLine, loadDotEnv } from "../src/env.js";
-import { verifyAdminAuth, verifyMetaSignature } from "../src/security.js";
+import { adminSessionValue, verifyAdminAuth, verifyMetaSignature } from "../src/security.js";
 import { markEventIfNew } from "../src/storage.js";
 import { evaluateReadiness } from "../src/readiness.js";
 import { analyzeCommerceMessage } from "../src/order-intelligence.js";
@@ -683,6 +683,10 @@ test("validates admin auth with bearer, basic and x-admin-token", () => {
     );
     assert.equal(
       verifyAdminAuth({ "x-admin-token": "admin-secret" }).ok,
+      true
+    );
+    assert.equal(
+      verifyAdminAuth({ cookie: `nibachat_admin=${adminSessionValue("admin-secret")}` }).ok,
       true
     );
     assert.equal(

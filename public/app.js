@@ -5,6 +5,7 @@ let conversations = [];
 let tenantStore = null;
 let dashboard = null;
 let dirty = false;
+let editingTenant = false;
 const bindQueue = [];
 
 const panels = {
@@ -32,7 +33,9 @@ document.querySelector("#tenantSelect").addEventListener("change", async (event)
   }
   currentTenantId = event.currentTarget.value;
   dirty = false;
+  editingTenant = false;
   await loadTenantWorkspace();
+  activateTab("dashboard");
   setSaved("Ucitano", true);
 });
 
@@ -59,6 +62,7 @@ async function boot() {
   currentTenantId = tenants[0]?.id || "default";
   renderTenantSelect();
   await loadTenantWorkspace();
+  setEditMode(false);
   renderAll();
   setSaved("Ucitano", true);
 }
@@ -69,6 +73,7 @@ async function loadTenantWorkspace() {
   tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
   dashboard = await fetchJson("/api/dashboard");
   renderTenantSelect();
+  setEditMode(editingTenant);
   renderAll();
 }
 
@@ -106,6 +111,7 @@ function renderDashboard() {
   const stats = selected.stats || {};
   const usage = selected.usage || {};
   const remaining = Math.max(0, 100 - Number(usage.percentUsed || 0));
+  const automationHealth = computeAutomationHealth(selected, stats, usage);
   panels.dashboard.innerHTML = `
     <section class="client-focus-hero" style="--client-color: ${escapeAttr(selected.color || "#10b981")}; --usage: ${remaining}%">
       <div class="client-orbit">${remaining}%</div>
@@ -113,17 +119,20 @@ function renderDashboard() {
         <p class="eyebrow">Izabrani klijent</p>
         <h2>${escapeHtml(selected.business?.name || selected.name || "Nema klijenta")}</h2>
         <p>${escapeHtml(selected.niche || selected.business?.sourceUrl || "Izaberi klijenta iz padajuceg menija da vidis samo njegove podatke.")}</p>
+        <div class="hero-actions">
+          <button class="primary" data-edit-current>Izmeni klijenta</button>
+          <button data-open-client-list>Lista klijenata</button>
+        </div>
       </div>
-      <div class="master-usage">
-        <span>API budzet ovog klijenta</span>
-        <strong>${formatMoney(usage.estimatedCost)} / ${formatMoney(usage.monthlyLimitUsd)}</strong>
-        ${usageBar(remaining, "preostalo")}
+      <div class="metric-ring-group">
+        ${ringMetric("API", remaining, "preostalo", selected.color || "#10b981")}
+        ${ringMetric("Health", automationHealth, "spremno", "#3b82f6")}
       </div>
     </section>
 
     <section class="stat-grid">
       ${statCard("Poruke danas", stats.messagesToday || 0, "Samo ovaj klijent")}
-      ${statCard("Odgovori bota", stats.botRepliesToday || 0, "Automatski odgovori danas")}
+      ${statCard("AI odgovori", stats.botRepliesToday || 0, "Automatski odgovori danas")}
       ${statCard("Razgovori", stats.conversations || 0, "Cuvaju se 30 dana")}
       ${statCard("Narudzbine", stats.orders || 0, "Zabelezeni leadovi")}
       ${statCard("Reklamacije", stats.complaints || 0, "Zamene, kasnjenja i problemi")}
@@ -142,11 +151,11 @@ function renderDashboard() {
     )}
 
     ${section(
-      "Kako da naucis agenta",
+      "Kako se uci automatizacija",
       `<div class="learning-grid">
         <article>
           <h3>1. Ubaci URL shopa</h3>
-          <p>U profilu klijenta upisi URL sajta i pokreni sync. Bot ce izvuci proizvode, cene, politiku dostave, rokove izrade i FAQ tekstove u bazu znanja.</p>
+          <p>U profilu klijenta upisi URL sajta i pokreni sync. Automatizacija izvlaci proizvode, cene, politiku dostave, rokove izrade i FAQ tekstove u bazu znanja.</p>
         </article>
         <article>
           <h3>2. Dodaj tacna pravila</h3>
@@ -164,10 +173,17 @@ function renderDashboard() {
     button.addEventListener("click", async () => {
       currentTenantId = button.dataset.openDashboardTenant;
       dirty = false;
+      editingTenant = false;
       await loadTenantWorkspace();
-      activateTab("business");
+      activateTab("dashboard");
       setSaved("Ucitano", true);
     });
+  });
+  panels.dashboard.querySelector("[data-edit-current]")?.addEventListener("click", () => openTenantEditor(currentTenantId));
+  panels.dashboard.querySelector("[data-open-client-list]")?.addEventListener("click", () => {
+    editingTenant = false;
+    setEditMode(false);
+    activateTab("tenants");
   });
 }
 
@@ -215,6 +231,44 @@ function usageBar(value, label = "") {
   return `<div class="usage-bar large" aria-label="${escapeAttr(label)}" style="--usage: ${safeValue}%"><span></span></div>`;
 }
 
+function ringMetric(label, value, hint, color) {
+  const safeValue = Math.max(0, Math.min(100, Number(value || 0)));
+  return `<div class="ring-metric" style="--ring-value:${safeValue}%; --ring-color:${escapeAttr(color)}">
+    <strong>${Math.round(safeValue)}%</strong>
+    <span>${escapeHtml(label)}</span>
+    <small>${escapeHtml(hint)}</small>
+  </div>`;
+}
+
+function computeAutomationHealth(tenant, stats, usage) {
+  let score = 0;
+  if ((stats.activeChannels || 0) > 0) score += 22;
+  if ((stats.products || 0) > 0) score += 18;
+  if ((stats.knowledge || 0) > 0 || (tenant.business?.sourceUrl || tenant.niche)) score += 18;
+  if (tenant.status === "active") score += 14;
+  if (Number(usage.percentUsed || 0) < 95) score += 14;
+  if ((stats.handoffs || 0) >= 0) score += 14;
+  return Math.min(100, score);
+}
+
+async function openTenantEditor(tenantId) {
+  currentTenantId = tenantId || currentTenantId;
+  dirty = false;
+  editingTenant = true;
+  await loadTenantWorkspace();
+  setEditMode(true);
+  activateTab("business");
+  setSaved("Izmena otvorena", true);
+}
+
+function setEditMode(enabled) {
+  editingTenant = Boolean(enabled);
+  document.querySelectorAll(".edit-tab").forEach((button) => {
+    button.hidden = !editingTenant;
+  });
+  document.body.classList.toggle("editing-tenant", editingTenant);
+}
+
 function renderTenantSelect() {
   const select = document.querySelector("#tenantSelect");
   select.innerHTML = tenants
@@ -226,12 +280,12 @@ function renderTenants() {
   const pending = tenants.filter((tenant) => tenant.status === "pending");
   const active = tenants.filter((tenant) => tenant.status !== "pending");
   panels.tenants.innerHTML = section(
-    "Klijenti - logican flow",
+    "Klijenti",
     `<div class="setup-flow">
-      <article><span>1</span><strong>Prijava ili rucni unos</strong><small>Klijent salje signup ili ga ti dodas.</small></article>
-      <article><span>2</span><strong>Odobrenje</strong><small>Pending zahtev dobija login tek kad ga odobris.</small></article>
-      <article><span>3</span><strong>Podesavanje</strong><small>API, kanali, shop, Google Sheet i znanje.</small></article>
-      <article><span>4</span><strong>Pokretanje</strong><small>Ukljucis slanje i pratis dashboard.</small></article>
+      <article><span>1</span><strong>Signup</strong><small>Klijent salje kratak zahtev sa landing stranice.</small></article>
+      <article><span>2</span><strong>Odobrenje</strong><small>Login dobija tek kada ga master admin odobri.</small></article>
+      <article><span>3</span><strong>Izmena</strong><small>Detaljna podesavanja se otvaraju samo kroz Izmeni.</small></article>
+      <article><span>4</span><strong>Pokretanje</strong><small>Ukljucis kanale, API, znanje i pratis metrike.</small></article>
     </div>
     <div class="actions"><button id="showAddTenant" class="primary">Dodaj novog klijenta</button></div>
     <div id="addTenantPanel" class="wizard-panel" hidden>
@@ -263,7 +317,7 @@ function renderTenants() {
     </div>
     ${pending.length ? `<h2>Pending prijave</h2><div class="collection">${pending.map(tenantItem).join("")}</div>` : ""}
     <h2>Aktivni i ostali klijenti</h2>
-    <div class="collection">${active.map(tenantItem).join("")}</div>`
+    <div class="client-table">${active.map(tenantItem).join("") || `<div class="empty-state">Nema aktivnih klijenata.</div>`}</div>`
   );
 
   panels.tenants.querySelector("#showAddTenant").addEventListener("click", () => {
@@ -318,8 +372,9 @@ function renderTenants() {
     tenants = await fetchJson("/api/tenants");
     currentTenantId = tenant.id;
     dirty = false;
+    editingTenant = true;
     await loadTenantWorkspace();
-    activateTab("business");
+    openTenantEditor(tenant.id);
     setSaved("Klijent dodat", true);
   });
 
@@ -328,9 +383,16 @@ function renderTenants() {
       if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) return;
       currentTenantId = button.dataset.openTenant;
       dirty = false;
+      editingTenant = false;
       await loadTenantWorkspace();
-      activateTab("business");
+      activateTab("dashboard");
       setSaved("Ucitano", true);
+    });
+  });
+  panels.tenants.querySelectorAll("[data-edit-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) return;
+      await openTenantEditor(button.dataset.editTenant);
     });
   });
 
@@ -373,29 +435,28 @@ function renderTenants() {
 function tenantItem(tenant) {
   const stats = tenant.stats || {};
   const webhookUrl = `${window.location.origin}/webhook/${tenant.id}`;
-  return `<article class="item">
-    <div class="item-header">
-      <h3>${escapeHtml(tenant.name)}</h3>
-      <div class="actions">
-        <button data-open-tenant="${escapeAttr(tenant.id)}">Otvori</button>
-        ${tenant.status === "pending" ? `<button class="primary" data-approve-tenant="${escapeAttr(tenant.id)}">Odobri</button><button class="danger" data-reject-tenant="${escapeAttr(tenant.id)}">Odbij</button>` : `<button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>`}
+  const remaining = Math.max(0, 100 - Number(tenant.usage?.percentUsed || 0));
+  return `<article class="client-row" style="--client-color:${escapeAttr(tenant.color || "#10b981")}">
+    <div class="client-row-main">
+      <span class="client-avatar"></span>
+      <div>
+        <h3>${escapeHtml(tenant.name)}</h3>
+        <small>${escapeHtml(tenant.niche || "niche nije dodat")} · ${escapeHtml(tenant.ownerEmail || "bez emaila")}</small>
       </div>
     </div>
-    <dl class="mini-stats">
-      <dt>ID</dt><dd>${escapeHtml(tenant.id)}</dd>
-      <dt>Status</dt><dd>${escapeHtml(tenant.status)}</dd>
-      <dt>Niche</dt><dd>${escapeHtml(tenant.niche || "-")}</dd>
-      <dt>Razgovori</dt><dd>${stats.conversations || 0}</dd>
-      <dt>Handoff</dt><dd>${stats.handoffs || 0}</dd>
-      <dt>API env</dt><dd>${escapeHtml(tenant.id === currentTenantId ? config.ai.apiKeyEnv : "otvori klijenta")}</dd>
-    </dl>
-    <div class="field full">
-      <label>Webhook URL</label>
-      <input readonly value="${escapeAttr(webhookUrl)}" />
+    <div class="client-row-kpis">
+      <span><strong>${stats.botRepliesToday || 0}</strong> AI odgovora</span>
+      <span><strong>${stats.orders || 0}</strong> narudzbine</span>
+      <span><strong>${stats.handoffs || 0}</strong> handoff</span>
+      <span><strong>${remaining}%</strong> API</span>
     </div>
-    <div class="field full">
-      <label>Client login URL</label>
+    <div class="client-row-links">
+      <input readonly value="${escapeAttr(webhookUrl)}" />
       <input readonly value="${escapeAttr(`${window.location.origin}/client.html?tenant=${tenant.id}`)}" />
+    </div>
+    <div class="actions">
+      <button data-open-tenant="${escapeAttr(tenant.id)}">Dashboard</button>
+      ${tenant.status === "pending" ? `<button class="primary" data-approve-tenant="${escapeAttr(tenant.id)}">Odobri</button><button class="danger" data-reject-tenant="${escapeAttr(tenant.id)}">Odbij</button>` : `<button class="primary" data-edit-tenant="${escapeAttr(tenant.id)}">Izmeni</button><button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>`}
     </div>
   </article>`;
 }
@@ -405,7 +466,20 @@ function renderBusiness() {
   config.integrations ||= {};
   config.integrations.googleSheets ||= {};
   config.usage ||= {};
-  panels.business.innerHTML = section(
+  const tenant = tenants.find((item) => item.id === currentTenantId) || {};
+  panels.business.innerHTML = `
+    <section class="editor-shell" style="--client-color:${escapeAttr(tenant.color || "#10b981")}">
+      <div>
+        <p class="eyebrow">Izmena klijenta</p>
+        <h2>${escapeHtml(tenant.name || config.business.name || currentTenantId)}</h2>
+        <p>Ovde menjas kompletno podesavanje za izabranog klijenta. Klijent vidi samo svoj portal, brojeve, narudzbine, reklamacije i znanje koje mu dozvolis.</p>
+      </div>
+      <div class="actions">
+        <button data-close-editor>Vrati se na dashboard</button>
+        <button class="primary" data-save-editor>Sacuvaj izmene</button>
+      </div>
+    </section>
+    ${section(
     "Osnovno",
     `<div class="grid">
       ${textField("Naziv", config.business.name, (value) => (config.business.name = value))}
@@ -422,7 +496,7 @@ function renderBusiness() {
       ${textField("Google Sheet webhook env", config.integrations.googleSheets.webhookUrlEnv, (value) => (config.integrations.googleSheets.webhookUrlEnv = value))}
       ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
-  );
+  )}`;
   panels.business.insertAdjacentHTML(
     "beforeend",
     section(
@@ -438,6 +512,12 @@ function renderBusiness() {
     )
   );
   bindInputs(panels.business);
+  panels.business.querySelector("[data-close-editor]").addEventListener("click", () => {
+    editingTenant = false;
+    setEditMode(false);
+    activateTab("dashboard");
+  });
+  panels.business.querySelector("[data-save-editor]").addEventListener("click", save);
   panels.business.querySelector("#syncSite").addEventListener("click", async () => {
     setSaved("Ucitavam sajt...", false);
     const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/sync-site`, {
@@ -527,7 +607,7 @@ function renderAutomation() {
   panels.automation.innerHTML = section(
     "Automatizacija",
     `<div class="grid three">
-      ${checkboxField("Bot aktivan", config.automation.enabled, (value) => (config.automation.enabled = value))}
+      ${checkboxField("AI automatizacija aktivna", config.automation.enabled, (value) => (config.automation.enabled = value))}
       ${numberField("24h prozor", config.automation.policyWindowHours, (value) => (config.automation.policyWindowHours = Number(value)))}
       ${numberField("Human agent dani", config.automation.humanAgentWindowDays, (value) => (config.automation.humanAgentWindowDays = Number(value)))}
       ${numberField("Dedup sati", config.automation.deduplicationWindowHours, (value) => (config.automation.deduplicationWindowHours = Number(value)))}
@@ -649,7 +729,7 @@ function renderKnowledge() {
       enabled: true,
       name: "Novo pravilo",
       keywords: ["kljucna rec"],
-      response: "Odgovor bota",
+      response: "Odgovor automatizacije",
       confidence: 0.9
     });
     markDirty();

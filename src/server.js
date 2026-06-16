@@ -24,7 +24,9 @@ import { getMetrics, incrementMetric, recordError, setGauge } from "./metrics.js
 import { checkRateLimit, getClientIp } from "./rate-limit.js";
 import { evaluateReadiness } from "./readiness.js";
 import {
+  adminSessionValue,
   getAdminToken,
+  getAdminUsername,
   getAppSecret,
   getVerifyToken,
   isLocalHost,
@@ -62,7 +64,11 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp"
 };
 
 export async function handleRequest(request, response) {
@@ -80,6 +86,10 @@ export async function handleRequest(request, response) {
 
     if (url.pathname.startsWith("/client-api/")) {
       return await handleClientApi(request, response, url);
+    }
+
+    if (url.pathname.startsWith("/auth/")) {
+      return await handleAuthApi(request, response, url);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -462,6 +472,36 @@ async function handleClientApi(request, response, url) {
       eventTimestamp: body.eventTimestamp || Date.now()
     });
     return sendJson(response, 200, { result, conversation });
+  }
+
+  sendJson(response, 404, { error: "not_found" });
+}
+
+async function handleAuthApi(request, response, url) {
+  if (request.method === "POST" && url.pathname === "/auth/admin-login") {
+    const body = await readJsonBody(request);
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "");
+
+    if (username === getAdminUsername() && password === getAdminToken() && getAdminToken()) {
+      response.writeHead(200, securityHeaders({
+        "Content-Type": "application/json; charset=utf-8",
+        "Set-Cookie": `nibachat_admin=${encodeURIComponent(adminSessionValue(password))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 12}${process.env.VERCEL ? "; Secure" : ""}`
+      }));
+      response.end(JSON.stringify({ ok: true, redirectTo: "/admin.html" }));
+      return;
+    }
+
+    return sendJson(response, 401, { error: "invalid_admin_login" });
+  }
+
+  if (request.method === "POST" && url.pathname === "/auth/logout") {
+    response.writeHead(200, securityHeaders({
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": "nibachat_admin=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+    }));
+    response.end(JSON.stringify({ ok: true }));
+    return;
   }
 
   sendJson(response, 404, { error: "not_found" });
@@ -859,10 +899,13 @@ function matchTenantApiRoute(pathname) {
 function isPublicAsset(pathname) {
   return pathname === "/" ||
     pathname === "/index.html" ||
+    pathname === "/login.html" ||
+    pathname === "/login.js" ||
     pathname === "/landing.js" ||
     pathname === "/client.html" ||
     pathname === "/client-app.js" ||
-    pathname === "/styles.css";
+    pathname === "/styles.css" ||
+    pathname.startsWith("/assets/");
 }
 
 function publicTenant(tenant) {
@@ -965,7 +1008,7 @@ function requireAdminAccess(request, response) {
 
   response.writeHead(401, securityHeaders({
     "Content-Type": "application/json; charset=utf-8",
-    "WWW-Authenticate": 'Basic realm="Meta Bot Console"'
+    "WWW-Authenticate": 'Basic realm="NibaChat Console"'
   }));
   response.end(JSON.stringify({ error: "admin_auth_required" }));
   return false;

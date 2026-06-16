@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NibaChat Login</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="login-shell">
+      <section class="login-card">
+        <p class="eyebrow">NibaChat</p>
+        <h1>Login</h1>
+        <p>Jedan ulaz za master admina i klijente. Pristup se razlikuje po korisnickom imenu i sifri.</p>
+        <form id="unifiedLoginForm" class="signup-form">
+          <div class="field">
+            <label for="loginUsername">Username / klijent ID</label>
+            <input id="loginUsername" name="username" autocomplete="username" required placeholder="admin ili klijent-id" />
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button class="primary">Udji u panel</button>
+          <p id="loginStatus" class="form-note"></p>
+        </form>
+      </section>
+    </main>
+    <script src="/login.js" type="module"></script>
+  </body>
+</html>

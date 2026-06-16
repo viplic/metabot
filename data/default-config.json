@@ -4,7 +4,7 @@
     "language": "sr",
     "timezone": "Europe/Belgrade",
     "shortDescription": "Korisnicka podrska preko Messengera i Instagrama.",
-    "defaultReply": "Hvala na poruci. Ako nisam siguran u odgovor, razgovor cu proslediti agentu.",
+    "defaultReply": "Hvala na poruci. Provericu dostupne informacije i, ako je potrebno, proslediti razgovor timu za podrsku.",
     "privacyNoticeUrl": "",
     "dataDeletionUrl": ""
   },
@@ -43,7 +43,7 @@
     "humanAgentWindowDays": 7,
     "deduplicationWindowHours": 48,
     "confidenceThreshold": 0.72,
-    "leadCapturePrompt": "Da bih pomogao agentu, posaljite jos: {field}.",
+    "leadCapturePrompt": "Da bismo zavrsili zahtev, posaljite jos: {field}.",
     "handoffKeywords": ["agent", "operater", "covek", "čovek", "human", "uzivo"],
     "riskyKeywords": ["reklamacija", "advokat", "tužba", "tuzba", "povracaj novca", "refund", "kartica"],
     "collectFields": [
@@ -72,7 +72,7 @@
         "enabled": true,
         "name": "Radno vreme",
         "keywords": ["radno vreme", "otvoreno", "working hours"],
-        "response": "Radimo ponedeljak-petak 09:00-17:00. Ako zelite, mogu odmah da prosledim razgovor agentu.",
+        "response": "Radimo ponedeljak-petak 09:00-17:00. Ako zelite, mogu odmah da prosledim razgovor timu za podrsku.",
         "confidence": 0.98
       },
       {
@@ -80,7 +80,7 @@
         "enabled": true,
         "name": "Lokacija",
         "keywords": ["lokacija", "adresa", "gde se nalazite"],
-        "response": "Napisite tacnu adresu u podesavanjima bota, pa cu je automatski slati klijentima.",
+        "response": "Napisite tacnu adresu u podesavanjima automatizacije, pa ce se automatski slati klijentima.",
         "confidence": 0.95
       }
     ],
@@ -90,7 +90,7 @@
         "enabled": true,
         "question": "Koliko kosta usluga?",
         "keywords": ["cena", "cenovnik", "koliko kosta", "price"],
-        "answer": "Cene zavise od usluge. Posaljite sta vam treba i pripremicu odgovor ili cu proslediti agentu."
+        "answer": "Cene zavise od usluge. Posaljite sta vam treba i pripremicu odgovor ili cu proslediti timu za podrsku."
       },
       {
         "id": "appointment",
@@ -124,7 +124,7 @@
       "complexKeywords": ["analiziraj", "strategija", "uporedi", "objasni detaljno", "detaljno", "plan", "problem", "greska", "greška", "kod", "integracija", "ugovor", "reklamacija", "pravni", "izracunaj", "izračunaj"]
     },
     "fallbackToHumanOnError": true,
-    "systemPrompt": "Ti si bot za korisnicku podrsku. Odgovaraj kratko, tacno i bez izmisljanja. Ako nisi siguran, predlozi razgovor sa agentom."
+    "systemPrompt": "Ti si iskusan predstavnik korisnicke podrske za konkretan shop. Odgovaraj kratko, tacno, prirodno i bez izmisljanja. Ne pominji da si AI ili automatizacija. Ako nisi siguran, predlozi da tim proveri zahtev."
   },
   "catalog": {
     "sourceUrl": "",
@@ -161,7 +161,7 @@
         "enabled": true,
         "title": "Privatnost i brisanje podataka",
         "keywords": ["privatnost", "brisanje", "podaci", "gdpr"],
-        "content": "Korisnik moze zatraziti brisanje podataka. Bot cuva samo podatke potrebne za podrsku i postuje retention podesavanje.",
+        "content": "Korisnik moze zatraziti brisanje podataka. Sistem cuva samo podatke potrebne za podrsku i postuje retention podesavanje.",
         "response": "Mozete zatraziti brisanje podataka. Cuvamo samo podatke potrebne za podrsku i postujemo podeseni rok cuvanja."
       }
     ]
@@ -169,7 +169,7 @@
   "handoff": {
     "enabled": true,
     "mode": "conversation_routing",
-    "message": "Razumem. Prosledicu razgovor ljudskom agentu.",
+    "message": "Razumem. Prosledicu razgovor timu za podrsku.",
     "ticketing": {
       "enabled": false,
       "provider": "webhook",

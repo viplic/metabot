@@ -85,7 +85,7 @@ function renderAll() {
     renderSidebar();
     return;
   }
-  document.querySelector("#portalTitle").textContent = `${tenant.name} bot`;
+  document.querySelector("#portalTitle").textContent = `${tenant.name} automatizacija`;
   renderDashboard();
   renderBusiness();
   renderChannels();
@@ -142,14 +142,14 @@ function renderDashboard() {
         <p>Ovde vidite samo brojeve i statuse. Sadrzaj razgovora nije prikazan u klijentskom portalu.</p>
       </div>
       <div class="master-usage">
-        <span>Status bota</span>
+        <span>Status automatizacije</span>
         <strong>${config.automation?.enabled !== false ? "Aktivan" : "Pauziran"}</strong>
         <small>${metrics.activeChannels} aktivna kanala</small>
       </div>
     </section>
     <section class="stat-grid">
       ${statCard("Poruke danas", metrics.messagesToday, "Ukupno registrovano")}
-      ${statCard("Odgovori bota", metrics.botRepliesToday, "Bez prikaza teksta")}
+      ${statCard("AI odgovori", metrics.botRepliesToday, "Bez prikaza teksta")}
       ${statCard("Narudzbine", metrics.orders, "Poslate u Google Sheet kada je povezan")}
       ${statCard("Reklamacije", metrics.complaints, "Zamene, kasnjenja i problemi")}
       ${statCard("Handoff", metrics.handoffs, "Treba ljudska provera")}
