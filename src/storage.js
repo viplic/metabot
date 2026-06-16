@@ -5,10 +5,12 @@ const DATA_DIR = path.resolve("data");
 const CONVERSATIONS_PATH = path.join(DATA_DIR, "conversations.json");
 const RAW_EVENTS_PATH = path.join(DATA_DIR, "raw-events.jsonl");
 const PROCESSED_EVENTS_PATH = path.join(DATA_DIR, "processed-events.json");
+const TENANT_DATA_DIR = path.join(DATA_DIR, "tenants");
+const DEFAULT_TENANT_ID = "default";
 
-export async function loadConversations() {
+export async function loadConversations(tenantId = DEFAULT_TENANT_ID) {
   try {
-    const raw = await fs.readFile(CONVERSATIONS_PATH, "utf8");
+    const raw = await fs.readFile(conversationsPath(tenantId), "utf8");
     const data = JSON.parse(raw);
     return Array.isArray(data) ? data : [];
   } catch (error) {
@@ -17,11 +19,11 @@ export async function loadConversations() {
   }
 }
 
-export async function saveConversations(conversations) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tempPath = `${CONVERSATIONS_PATH}.tmp`;
+export async function saveConversations(conversations, tenantId = DEFAULT_TENANT_ID) {
+  await fs.mkdir(path.dirname(conversationsPath(tenantId)), { recursive: true });
+  const tempPath = `${conversationsPath(tenantId)}.tmp`;
   await fs.writeFile(tempPath, `${JSON.stringify(conversations, null, 2)}\n`, "utf8");
-  await fs.rename(tempPath, CONVERSATIONS_PATH);
+  await fs.rename(tempPath, conversationsPath(tenantId));
 }
 
 export async function appendRawEvent(event) {
@@ -29,9 +31,10 @@ export async function appendRawEvent(event) {
   await fs.appendFile(RAW_EVENTS_PATH, `${JSON.stringify(event)}\n`, "utf8");
 }
 
-export async function markEventIfNew(eventId, ttlHours = 48) {
+export async function markEventIfNew(eventId, ttlHours = 48, tenantId = DEFAULT_TENANT_ID) {
   if (!eventId) return true;
 
+  const scopedEventId = `${normalizeTenantId(tenantId)}:${eventId}`;
   const now = Date.now();
   const cutoff = now - Math.max(1, Number(ttlHours || 48)) * 60 * 60 * 1000;
   const processed = await loadProcessedEvents();
@@ -42,9 +45,9 @@ export async function markEventIfNew(eventId, ttlHours = 48) {
     }
   }
 
-  if (processed[eventId]) return false;
+  if (processed[scopedEventId]) return false;
 
-  processed[eventId] = new Date(now).toISOString();
+  processed[scopedEventId] = new Date(now).toISOString();
   await saveProcessedEvents(processed);
   return true;
 }
@@ -186,4 +189,18 @@ async function rewriteRawEvents(shouldKeep) {
 
 function cryptoRandomId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function conversationsPath(tenantId) {
+  const id = normalizeTenantId(tenantId);
+  if (id === DEFAULT_TENANT_ID) return CONVERSATIONS_PATH;
+  return path.join(TENANT_DATA_DIR, `${id}.conversations.json`);
+}
+
+function normalizeTenantId(value) {
+  return String(value || DEFAULT_TENANT_ID)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-|-$/g, "") || DEFAULT_TENANT_ID;
 }

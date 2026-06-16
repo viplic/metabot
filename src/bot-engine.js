@@ -1,9 +1,11 @@
 import { redactValue } from "./security.js";
 import { askAiFallback } from "./ai-client.js";
 import { retrieveKnowledge, shouldAutoReplyFromKnowledge } from "./knowledge.js";
+import { analyzeCommerceMessage, formatMissingOrderPrompt } from "./order-intelligence.js";
 
 export async function routeIncomingMessage({
   text,
+  attachments = [],
   config,
   conversation,
   channelType = "messenger",
@@ -63,6 +65,49 @@ export async function routeIncomingMessage({
     return handoffDecision(config, "risky_keyword", riskyKeyword, profileUpdates);
   }
 
+  const commerce = analyzeCommerceMessage({
+    text: cleanText,
+    conversation,
+    config,
+    catalog: config.catalog || {}
+  });
+
+  if (commerce.intent === "order" && commerce.missingFields.length) {
+    return decision({
+      action: "collect_order_data",
+      reply: formatMissingOrderPrompt(commerce.missingFields),
+      confidence: commerce.confidence,
+      reason: "missing_order_fields",
+      matched: commerce.missingFields.join(","),
+      profileUpdates,
+      commerce
+    });
+  }
+
+  if (commerce.intent === "late_shipment") {
+    return decision({
+      action: "reply",
+      reply: "Razumem, proverićemo pošiljku i rešiti situaciju. Pošaljite broj telefona ili podatke porudžbine kako bismo mogli da pronađemo porudžbinu.",
+      confidence: commerce.confidence,
+      reason: "late_shipment",
+      matched: "shipment_status",
+      profileUpdates,
+      commerce
+    });
+  }
+
+  if (commerce.intent === "complaint") {
+    return decision({
+      action: "reply",
+      reply: "Žao mi je zbog neprijatnosti. Rešićemo situaciju smireno i što brže. Pošaljite opis problema, fotografiju ako je imate i kontakt telefon.",
+      confidence: commerce.confidence,
+      reason: "complaint",
+      matched: "complaint",
+      profileUpdates,
+      commerce
+    });
+  }
+
   const ruleMatch = findBestRule(lower, config.automation.rules);
   if (ruleMatch) {
     return decision({
@@ -114,6 +159,7 @@ export async function routeIncomingMessage({
   if (config.ai.enabled) {
     const aiDecision = await askAiFallback({
       text: cleanText,
+      attachments,
       config,
       conversation,
       knowledgeMatches
@@ -221,6 +267,8 @@ function decision(payload) {
     confidence: payload.confidence,
     reason: payload.reason,
     matched: payload.matched || null,
+    modelRouting: payload.modelRouting || null,
+    commerce: payload.commerce || null,
     profileUpdates: payload.profileUpdates || {},
     sendAllowed: payload.sendAllowed !== false,
     aiResponseId: payload.aiResponseId || null
@@ -233,14 +281,24 @@ function interpolate(template, context) {
     .replaceAll("{channel}", context.channelType || "");
 }
 
-export function appendConversationMessages(conversation, incomingText, result, config) {
+export function appendConversationMessages(conversation, incomingText, result, config, attachments = []) {
   const now = new Date().toISOString();
   const redact = Boolean(config.privacy.redactLogs);
-  conversation.messages.push({
+  const incomingMessage = {
     sender: "user",
     body: redactValue(incomingText, redact),
     createdAt: now
-  });
+  };
+
+  if (attachments.length) {
+    incomingMessage.attachments = attachments.map((attachment) => ({
+      type: attachment.type,
+      mimeType: attachment.mimeType || "",
+      url: redact ? "[redacted]" : attachment.url
+    }));
+  }
+
+  conversation.messages.push(incomingMessage);
 
   if (result.sendAllowed !== false && result.reply) {
     conversation.messages.push({
@@ -250,6 +308,8 @@ export function appendConversationMessages(conversation, incomingText, result, c
       confidence: result.confidence,
       reason: result.reason,
       matched: result.matched,
+      modelRouting: result.modelRouting,
+      commerce: result.commerce,
       aiResponseId: result.aiResponseId,
       createdAt: now
     });
@@ -270,6 +330,8 @@ export function appendConversationMessages(conversation, incomingText, result, c
       confidence: result.confidence,
       reason: result.reason,
       matched: result.matched,
+      modelRouting: result.modelRouting,
+      commerce: result.commerce,
       aiResponseId: result.aiResponseId,
       sendAllowed: result.sendAllowed !== false
     },

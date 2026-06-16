@@ -1,9 +1,14 @@
 let config;
+let tenants = [];
+let currentTenantId = "default";
 let conversations = [];
+let tenantStore = null;
 let dirty = false;
+const bindQueue = [];
 
 const panels = {
   business: document.querySelector("#tab-business"),
+  tenants: document.querySelector("#tab-tenants"),
   channels: document.querySelector("#tab-channels"),
   automation: document.querySelector("#tab-automation"),
   knowledge: document.querySelector("#tab-knowledge"),
@@ -18,6 +23,16 @@ document.querySelectorAll(".tabs button").forEach((button) => {
 });
 
 document.querySelector("#saveButton").addEventListener("click", save);
+document.querySelector("#tenantSelect").addEventListener("change", async (event) => {
+  if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) {
+    event.currentTarget.value = currentTenantId;
+    return;
+  }
+  currentTenantId = event.currentTarget.value;
+  dirty = false;
+  await loadTenantWorkspace();
+  setSaved("Ucitano", true);
+});
 
 try {
   await boot();
@@ -30,31 +45,156 @@ try {
       <p style="color: var(--muted); margin-bottom: 24px;">
         Ne možemo učitati konfiguraciju niti razgovore sa servera. Proverite da li je backend servis pokrenut i pokušajte ponovo.
       </p>
+      <pre style="white-space: pre-wrap; text-align: left; color: var(--muted); background: rgba(0,0,0,.2); padding: 12px; border-radius: 8px;">${escapeHtml(error.message || error)}</pre>
       <button onclick="window.location.reload()" class="primary">Pokušaj ponovo</button>
     </section>
   `;
 }
 
 async function boot() {
-  config = await fetchJson("/api/config");
-  conversations = await fetchJson("/api/conversations");
+  tenants = await fetchJson("/api/tenants");
+  currentTenantId = tenants[0]?.id || "default";
+  renderTenantSelect();
+  await loadTenantWorkspace();
   renderAll();
   setSaved("Ucitano", true);
 }
 
+async function loadTenantWorkspace() {
+  config = normalizeClientConfig(await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/config`));
+  conversations = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/conversations`);
+  tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+  renderTenantSelect();
+  renderAll();
+}
+
 function renderAll() {
-  renderBusiness();
-  renderChannels();
-  renderAutomation();
-  renderKnowledge();
-  renderAi();
-  renderHandoff();
-  renderPrivacy();
-  renderTest();
-  renderSidebar();
+  const steps = [
+    ["business", renderBusiness],
+    ["tenants", renderTenants],
+    ["channels", renderChannels],
+    ["automation", renderAutomation],
+    ["knowledge", renderKnowledge],
+    ["ai", renderAi],
+    ["handoff", renderHandoff],
+    ["privacy", renderPrivacy],
+    ["test", renderTest],
+    ["sidebar", renderSidebar]
+  ];
+
+  for (const [name, render] of steps) {
+    try {
+      render();
+    } catch (error) {
+      console.error(`Render failed: ${name}`, error);
+      if (panels[name]) {
+        panels[name].innerHTML = section("Greška u sekciji", `<pre style="white-space: pre-wrap; color: var(--muted);">${escapeHtml(error.message || error)}</pre>`);
+      }
+      throw error;
+    }
+  }
+}
+
+function renderTenantSelect() {
+  const select = document.querySelector("#tenantSelect");
+  select.innerHTML = tenants
+    .map((tenant) => `<option value="${escapeAttr(tenant.id)}" ${tenant.id === currentTenantId ? "selected" : ""}>${escapeHtml(tenant.name)} (${escapeHtml(tenant.id)})</option>`)
+    .join("");
+}
+
+function renderTenants() {
+  panels.tenants.innerHTML = section(
+    "Klijenti i profili",
+    `<div class="collection">
+      ${tenants.map(tenantItem).join("")}
+    </div>
+    <form id="addTenantForm" class="grid">
+      <div class="field">
+        <label for="newTenantName">Naziv klijenta</label>
+        <input id="newTenantName" name="name" placeholder="Novi klijent" />
+      </div>
+      <div class="field">
+        <label for="newTenantEmail">Email vlasnika</label>
+        <input id="newTenantEmail" name="ownerEmail" placeholder="klijent@example.com" />
+      </div>
+      <div class="actions full"><button class="primary">Dodaj klijenta</button></div>
+    </form>`
+  );
+
+  panels.tenants.querySelector("#addTenantForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const tenant = await fetchJson("/api/tenants", {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.get("name"),
+        ownerEmail: form.get("ownerEmail")
+      })
+    });
+    tenants = await fetchJson("/api/tenants");
+    currentTenantId = tenant.id;
+    dirty = false;
+    await loadTenantWorkspace();
+    activateTab("business");
+    setSaved("Klijent dodat", true);
+  });
+
+  panels.tenants.querySelectorAll("[data-open-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) return;
+      currentTenantId = button.dataset.openTenant;
+      dirty = false;
+      await loadTenantWorkspace();
+      activateTab("business");
+      setSaved("Ucitano", true);
+    });
+  });
+
+  panels.tenants.querySelectorAll("[data-reset-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const access = await fetchJson(`/api/tenants/${encodeURIComponent(button.dataset.resetTenant)}/access`, {
+        method: "POST",
+        body: "{}"
+      });
+      window.alert(`Client login:\n${window.location.origin}/client.html?tenant=${access.tenantId}\n\nPassword:\n${access.password}`);
+    });
+  });
+}
+
+function tenantItem(tenant) {
+  const stats = tenant.stats || {};
+  const webhookUrl = `${window.location.origin}/webhook/${tenant.id}`;
+  return `<article class="item">
+    <div class="item-header">
+      <h3>${escapeHtml(tenant.name)}</h3>
+      <div class="actions">
+        <button data-open-tenant="${escapeAttr(tenant.id)}">Otvori</button>
+        <button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>
+      </div>
+    </div>
+    <dl class="mini-stats">
+      <dt>ID</dt><dd>${escapeHtml(tenant.id)}</dd>
+      <dt>Status</dt><dd>${escapeHtml(tenant.status)}</dd>
+      <dt>Razgovori</dt><dd>${stats.conversations || 0}</dd>
+      <dt>Handoff</dt><dd>${stats.handoffs || 0}</dd>
+      <dt>API env</dt><dd>${escapeHtml(tenant.id === currentTenantId ? config.ai.apiKeyEnv : "otvori klijenta")}</dd>
+    </dl>
+    <div class="field full">
+      <label>Webhook URL</label>
+      <input readonly value="${escapeAttr(webhookUrl)}" />
+    </div>
+    <div class="field full">
+      <label>Client login URL</label>
+      <input readonly value="${escapeAttr(`${window.location.origin}/client.html?tenant=${tenant.id}`)}" />
+    </div>
+  </article>`;
 }
 
 function renderBusiness() {
+  config.catalog ||= {};
+  config.integrations ||= {};
+  config.integrations.googleSheets ||= {};
+  config.usage ||= {};
   panels.business.innerHTML = section(
     "Osnovno",
     `<div class="grid">
@@ -65,9 +205,40 @@ function renderBusiness() {
       ${textArea("Kratak opis", config.business.shortDescription, (value) => (config.business.shortDescription = value), "full")}
       ${textArea("Podrazumevani odgovor", config.business.defaultReply, (value) => (config.business.defaultReply = value), "full")}
       ${textField("Data deletion URL", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value), "full")}
+      ${textField("URL sajta / shopa", config.catalog.sourceUrl, (value) => (config.catalog.sourceUrl = value), "full")}
+      ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
+      ${numberField("Mesecni AI limit ($)", config.usage.monthlyLimitUsd, (value) => (config.usage.monthlyLimitUsd = Number(value)))}
+      ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
+      ${textField("Google Sheet webhook env", config.integrations.googleSheets.webhookUrlEnv, (value) => (config.integrations.googleSheets.webhookUrlEnv = value))}
+      ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
   );
+  panels.business.insertAdjacentHTML(
+    "beforeend",
+    section(
+      "Sajt i katalog",
+      `<div class="actions">
+        <button id="syncSite" class="primary">Sync sajt za ovog klijenta</button>
+      </div>
+      <div class="test-result">
+        <span>Proizvodi: ${tenantStore?.catalog?.products?.length || 0}</span>
+        <span>Pravila: ${tenantStore?.catalog?.policies?.length || 0}</span>
+        <span>Orders/Reklamacije: ${tenantStore?.orders?.length || 0}</span>
+      </div>`
+    )
+  );
   bindInputs(panels.business);
+  panels.business.querySelector("#syncSite").addEventListener("click", async () => {
+    setSaved("Ucitavam sajt...", false);
+    const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/sync-site`, {
+      method: "POST",
+      body: JSON.stringify({ sourceUrl: config.catalog.sourceUrl })
+    });
+    config = normalizeClientConfig(result.config);
+    tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+    setSaved(`Ucitan sajt: ${result.products} proizvoda`, true);
+    renderAll();
+  });
 }
 
 function renderChannels() {
@@ -357,20 +528,56 @@ function faqItem(faq) {
 }
 
 function renderAi() {
+  config.ai.modelRouting ||= {
+    enabled: true,
+    simpleModel: "gpt-5.4-nano",
+    standardModel: "gpt-5.4-mini",
+    complexModel: "gpt-5.5",
+    visionModel: "gpt-5.5",
+    standardMinChars: 220,
+    complexMinChars: 900,
+    complexKeywords: []
+  };
+
   panels.ai.innerHTML = section(
     "AI fallback",
     `<div class="grid">
       ${checkboxField("Ukljucen", config.ai.enabled, (value) => (config.ai.enabled = value))}
-      ${selectField("Provider", config.ai.provider, ["openai"], (value) => (config.ai.provider = value))}
+      ${selectField("Provider", config.ai.provider, ["openai", "gemini"], (value) => {
+        config.ai.provider = value;
+        if (value === "gemini" && config.ai.apiKeyEnv === "OPENAI_API_KEY") config.ai.apiKeyEnv = "GEMINI_API_KEY";
+        if (value === "gemini" && config.ai.model.startsWith("gpt-")) config.ai.model = "gemini-2.5-flash";
+        if (value === "openai" && config.ai.apiKeyEnv === "GEMINI_API_KEY") config.ai.apiKeyEnv = "OPENAI_API_KEY";
+        if (value === "openai" && config.ai.model.startsWith("gemini-")) config.ai.model = "gpt-4.1-mini";
+      })}
       ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
       ${textField("API key env", config.ai.apiKeyEnv, (value) => (config.ai.apiKeyEnv = value))}
       ${numberField("Max karaktera", config.ai.maxInputChars, (value) => (config.ai.maxInputChars = Number(value)))}
       ${numberField("Max izlaz tokena", config.ai.maxOutputTokens, (value) => (config.ai.maxOutputTokens = Number(value)))}
       ${numberField("Max kontekst", config.ai.maxContextChars, (value) => (config.ai.maxContextChars = Number(value)))}
+      ${numberField("Max istorija", config.ai.maxHistoryChars, (value) => (config.ai.maxHistoryChars = Number(value)))}
+      ${numberField("Max slika", config.ai.maxImages, (value) => (config.ai.maxImages = Number(value)))}
       ${numberField("Temperatura", config.ai.temperature, (value) => (config.ai.temperature = Number(value)), 0, 2, 0.1)}
       ${checkboxField("Greska vodi na handoff", config.ai.fallbackToHumanOnError, (value) => (config.ai.fallbackToHumanOnError = value))}
       ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
     </div>`
+  );
+
+  panels.ai.insertAdjacentHTML(
+    "beforeend",
+    section(
+      "Model routing",
+      `<div class="grid">
+        ${checkboxField("Automatski izbor modela", config.ai.modelRouting.enabled, (value) => (config.ai.modelRouting.enabled = value))}
+        ${textField("Laka pitanja", config.ai.modelRouting.simpleModel, (value) => (config.ai.modelRouting.simpleModel = value))}
+        ${textField("Srednja pitanja", config.ai.modelRouting.standardModel, (value) => (config.ai.modelRouting.standardModel = value))}
+        ${textField("Zahtevna pitanja", config.ai.modelRouting.complexModel, (value) => (config.ai.modelRouting.complexModel = value))}
+        ${textField("Slike", config.ai.modelRouting.visionModel, (value) => (config.ai.modelRouting.visionModel = value))}
+        ${numberField("Srednji prag karaktera", config.ai.modelRouting.standardMinChars, (value) => (config.ai.modelRouting.standardMinChars = Number(value)))}
+        ${numberField("Zahtevan prag karaktera", config.ai.modelRouting.complexMinChars, (value) => (config.ai.modelRouting.complexMinChars = Number(value)))}
+        ${textField("Zahtevne reci", (config.ai.modelRouting.complexKeywords || []).join(", "), (value) => (config.ai.modelRouting.complexKeywords = splitCsv(value)), "full")}
+      </div>`
+    )
   );
   bindInputs(panels.ai);
 }
@@ -409,9 +616,9 @@ function renderPrivacy() {
     const platformUserId = new FormData(event.currentTarget).get("platformUserId");
     const result = await fetchJson("/api/privacy/delete-customer", {
       method: "POST",
-      body: JSON.stringify({ platformUserId })
+      body: JSON.stringify({ platformUserId, tenantId: currentTenantId })
     });
-    conversations = await fetchJson("/api/conversations");
+    conversations = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/conversations`);
     renderSidebar();
     setSaved(`Obrisano: ${result.deleted} / raw ${result.rawEventsDeleted}`, true);
   });
@@ -435,6 +642,7 @@ function renderTest() {
     const result = await fetchJson("/api/test-message", {
       method: "POST",
       body: JSON.stringify({
+        tenantId: currentTenantId,
         channelType: panels.test.querySelector("#testChannel").value,
         text: panels.test.querySelector("#testText").value
       })
@@ -454,16 +662,20 @@ function renderTestResult(payload) {
 }
 
 function renderSidebar() {
+  const usage = tenantStore?.usageSummary || {};
   const activeChannels = config.channels.filter((channel) => channel.enabled).length;
   const rules = config.automation.rules.filter((rule) => rule.enabled).length;
   const faqs = config.automation.faqs.filter((faq) => faq.enabled).length;
   const knowledge = config.knowledge.documents.filter((document) => document.enabled).length;
   document.querySelector("#statusList").innerHTML = `
+    <dt>Klijent</dt><dd>${escapeHtml(currentTenantId)}</dd>
     <dt>Kanali</dt><dd>${activeChannels}</dd>
     <dt>Pravila</dt><dd>${rules}</dd>
     <dt>FAQ</dt><dd>${faqs}</dd>
     <dt>Znanje</dt><dd>${knowledge}</dd>
     <dt>AI</dt><dd>${config.ai.enabled ? "on" : "off"}</dd>
+    <dt>API usage</dt><dd>${usage.percentUsed || 0}%</dd>
+    <dt>Orders</dt><dd>${tenantStore?.orders?.length || 0}</dd>
     <dt>Handoff</dt><dd>${config.handoff.enabled ? "on" : "off"}</dd>
   `;
 
@@ -483,7 +695,7 @@ function renderSidebar() {
 
 async function save() {
   try {
-    config = await fetchJson("/api/config", {
+    config = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/config`, {
       method: "PUT",
       body: JSON.stringify(config)
     });
@@ -551,8 +763,6 @@ function selectField(label, value, options, setter, extraClass = "", id = "") {
   </div>`;
 }
 
-const bindQueue = [];
-
 function queueBinder(inputId, setter, property) {
   bindQueue.push({ inputId, setter, property });
 }
@@ -614,9 +824,43 @@ async function fetchJson(url, options = {}) {
     ...options
   });
   if (!response.ok) {
-    throw new Error(`${url} ${response.status}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(`${url} ${response.status}${body ? `: ${body.slice(0, 240)}` : ""}`);
   }
   return response.json();
+}
+
+function normalizeClientConfig(value) {
+  const normalized = structuredClone(value || {});
+  normalized.business ||= {};
+  normalized.meta ||= {};
+  normalized.channels ||= [];
+  normalized.automation ||= {};
+  normalized.automation.rules ||= [];
+  normalized.automation.faqs ||= [];
+  normalized.automation.collectFields ||= [];
+  normalized.automation.handoffKeywords ||= [];
+  normalized.automation.riskyKeywords ||= [];
+  normalized.knowledge ||= {};
+  normalized.knowledge.documents ||= [];
+  normalized.ai ||= {};
+  normalized.ai.model ||= "gpt-5.5";
+  normalized.ai.apiKeyEnv ||= "OPENAI_API_KEY";
+  normalized.ai.modelRouting ||= {};
+  normalized.ai.modelRouting.complexKeywords ||= [];
+  normalized.handoff ||= {};
+  normalized.handoff.ticketing ||= {};
+  normalized.privacy ||= {};
+  normalized.catalog ||= {};
+  normalized.catalog.sourceUrl ||= "";
+  normalized.catalog.refreshEveryHours ||= 24;
+  normalized.usage ||= {};
+  normalized.usage.monthlyLimitUsd ||= 20;
+  normalized.integrations ||= {};
+  normalized.integrations.googleSheets ||= {};
+  normalized.integrations.googleSheets.webhookUrlEnv ||= "";
+  normalized.integrations.googleSheets.sheetUrl ||= "";
+  return normalized;
 }
 
 function markDirty() {

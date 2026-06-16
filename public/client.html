@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Client Bot Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Client Portal</p>
+        <h1 id="portalTitle">Podešavanja bota</h1>
+      </div>
+      <div class="top-actions">
+        <span id="saveStatus" class="status-dot">Nije ulogovan</span>
+        <button id="logoutButton">Logout</button>
+        <button id="saveButton" class="primary">Sačuvaj</button>
+      </div>
+    </header>
+
+    <main class="layout client-layout">
+      <nav class="tabs" aria-label="Sekcije">
+        <button data-tab="login" class="active">Login</button>
+        <button data-tab="business">Niche</button>
+        <button data-tab="channels">Profili</button>
+        <button data-tab="knowledge">Odgovori</button>
+        <button data-tab="ai">AI</button>
+        <button data-tab="test">Test</button>
+      </nav>
+
+      <section class="workspace">
+        <section id="tab-login" class="tab-panel active"></section>
+        <section id="tab-business" class="tab-panel"></section>
+        <section id="tab-channels" class="tab-panel"></section>
+        <section id="tab-knowledge" class="tab-panel"></section>
+        <section id="tab-ai" class="tab-panel"></section>
+        <section id="tab-test" class="tab-panel"></section>
+      </section>
+
+      <aside class="side">
+        <section>
+          <h2>Status</h2>
+          <dl id="statusList"></dl>
+        </section>
+        <section>
+          <h2>Razgovori</h2>
+          <div id="conversationList" class="conversation-list"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="/client-app.js" type="module"></script>
+  </body>
+</html>

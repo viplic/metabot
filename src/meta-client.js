@@ -8,7 +8,8 @@ export function normalizeMetaPayload(payload) {
   for (const entry of entries) {
     for (const event of entry.messaging || []) {
       const text = event.message?.text || event.postback?.payload || event.postback?.title || "";
-      if (!event.sender?.id || !text) continue;
+      const attachments = normalizeMessageAttachments(event.message?.attachments);
+      if (!event.sender?.id || (!text && !attachments.length)) continue;
       events.push({
         id: event.message?.mid || event.postback?.mid || crypto.randomUUID(),
         senderId: event.sender.id,
@@ -16,15 +17,17 @@ export function normalizeMetaPayload(payload) {
         pageId: entry.id || event.recipient?.id || "",
         timestamp: event.timestamp || Date.now(),
         channelType: inferChannelType(payload, event),
-        text
+        text,
+        attachments
       });
     }
 
     for (const change of entry.changes || []) {
       const value = change.value || {};
       const text = value.message || value.text || value.comment || "";
+      const attachments = normalizeChangeAttachments(value);
       const senderId = value.sender_id || value.from?.id;
-      if (!senderId || !text) continue;
+      if (!senderId || (!text && !attachments.length)) continue;
       events.push({
         id: value.message_id || crypto.randomUUID(),
         senderId,
@@ -32,12 +35,52 @@ export function normalizeMetaPayload(payload) {
         pageId: entry.id || "",
         timestamp: value.timestamp || Date.now(),
         channelType: payload.object === "instagram" ? "instagram" : "messenger",
-        text
+        text,
+        attachments
       });
     }
   }
 
   return events;
+}
+
+function normalizeMessageAttachments(attachments = []) {
+  return attachments
+    .map((attachment) => ({
+      type: attachment.type || "file",
+      url: attachment.payload?.url || "",
+      mimeType: attachment.payload?.mime_type || guessMimeType(attachment.payload?.url)
+    }))
+    .filter((attachment) => attachment.url);
+}
+
+function normalizeChangeAttachments(value) {
+  const candidates = [
+    value.media,
+    value.attachment,
+    value.attachments,
+    value.message?.attachments,
+    value.message?.attachment
+  ];
+
+  return candidates
+    .flatMap((candidate) => (Array.isArray(candidate) ? candidate : [candidate]))
+    .filter(Boolean)
+    .map((attachment) => ({
+      type: attachment.type || attachment.media_type || "file",
+      url: attachment.url || attachment.media_url || attachment.payload?.url || "",
+      mimeType: attachment.mime_type || attachment.payload?.mime_type || guessMimeType(attachment.url || attachment.media_url || attachment.payload?.url)
+    }))
+    .filter((attachment) => attachment.url);
+}
+
+function guessMimeType(url = "") {
+  const pathname = new URL(url, "https://example.local").pathname.toLowerCase();
+  if (pathname.endsWith(".png")) return "image/png";
+  if (pathname.endsWith(".webp")) return "image/webp";
+  if (pathname.endsWith(".gif")) return "image/gif";
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
+  return "";
 }
 
 export async function sendMetaText({ config, channel, recipientId, text }) {

@@ -102,16 +102,53 @@
     ]
   },
   "ai": {
-    "enabled": false,
+    "enabled": true,
     "provider": "openai",
     "model": "gpt-5.5",
     "apiKeyEnv": "OPENAI_API_KEY",
     "maxInputChars": 2000,
     "maxOutputTokens": 500,
     "maxContextChars": 4000,
+    "maxHistoryChars": 1600,
+    "maxImages": 3,
+    "maxImageBytes": 5242880,
     "temperature": 0.2,
+    "modelRouting": {
+      "enabled": true,
+      "simpleModel": "gpt-5.4-nano",
+      "standardModel": "gpt-5.4-mini",
+      "complexModel": "gpt-5.5",
+      "visionModel": "gpt-5.5",
+      "standardMinChars": 220,
+      "complexMinChars": 900,
+      "complexKeywords": ["analiziraj", "strategija", "uporedi", "objasni detaljno", "detaljno", "plan", "problem", "greska", "greška", "kod", "integracija", "ugovor", "reklamacija", "pravni", "izracunaj", "izračunaj"]
+    },
     "fallbackToHumanOnError": true,
     "systemPrompt": "Ti si bot za korisnicku podrsku. Odgovaraj kratko, tacno i bez izmisljanja. Ako nisi siguran, predlozi razgovor sa agentom."
+  },
+  "catalog": {
+    "sourceUrl": "",
+    "autoRefreshEnabled": true,
+    "refreshEveryHours": 24,
+    "lastRefreshAt": "",
+    "maxPages": 8
+  },
+  "orders": {
+    "enabled": true,
+    "requiredFields": ["name", "phone", "street", "city", "postalCode", "product"],
+    "optionalFields": ["color", "model", "quantity", "note"],
+    "captureComplaints": true
+  },
+  "usage": {
+    "monthlyLimitUsd": 20,
+    "warnAtPercent": 80
+  },
+  "integrations": {
+    "googleSheets": {
+      "enabled": false,
+      "webhookUrlEnv": "",
+      "sheetUrl": ""
+    }
   },
   "knowledge": {
     "enabled": true,

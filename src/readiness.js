@@ -20,9 +20,9 @@ export function evaluateReadiness(config) {
   }
 
   if (config.ai.enabled) {
-    const apiKeyEnv = config.ai.apiKeyEnv || "OPENAI_API_KEY";
+    const apiKeyEnv = config.ai.apiKeyEnv || (config.ai.provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY");
     checks.push(check("ai_api_key", isRealSecret(process.env[apiKeyEnv]), `${apiKeyEnv} is required when AI fallback is enabled.`));
-    checks.push(check("ai_responses_model", Boolean(config.ai.model), "AI model must be configured."));
+    checks.push(check("ai_model", Boolean(config.ai.model), "AI model must be configured."));
   }
 
   if (config.handoff.ticketing.enabled) {
