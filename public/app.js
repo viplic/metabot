@@ -3,10 +3,12 @@ let tenants = [];
 let currentTenantId = "default";
 let conversations = [];
 let tenantStore = null;
+let dashboard = null;
 let dirty = false;
 const bindQueue = [];
 
 const panels = {
+  dashboard: document.querySelector("#tab-dashboard"),
   business: document.querySelector("#tab-business"),
   tenants: document.querySelector("#tab-tenants"),
   channels: document.querySelector("#tab-channels"),
@@ -53,6 +55,7 @@ try {
 
 async function boot() {
   tenants = await fetchJson("/api/tenants");
+  dashboard = await fetchJson("/api/dashboard");
   currentTenantId = tenants[0]?.id || "default";
   renderTenantSelect();
   await loadTenantWorkspace();
@@ -64,6 +67,7 @@ async function loadTenantWorkspace() {
   config = normalizeClientConfig(await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/config`));
   conversations = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/conversations`);
   tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+  dashboard = await fetchJson("/api/dashboard");
   renderTenantSelect();
   renderAll();
 }
@@ -71,6 +75,7 @@ async function loadTenantWorkspace() {
 function renderAll() {
   const steps = [
     ["business", renderBusiness],
+    ["dashboard", renderDashboard],
     ["tenants", renderTenants],
     ["channels", renderChannels],
     ["automation", renderAutomation],
@@ -93,6 +98,115 @@ function renderAll() {
       throw error;
     }
   }
+}
+
+function renderDashboard() {
+  const totals = dashboard?.totals || {};
+  const items = dashboard?.tenants || [];
+  panels.dashboard.innerHTML = `
+    <section class="dashboard-hero">
+      <div>
+        <p class="eyebrow">Master admin</p>
+        <h2>Glavni dashboard za sve klijente</h2>
+        <p>Jedan pregled za sve biznise, dnevne odgovore, potrosnju API-ja, narudzbine, reklamacije i statuse integracija.</p>
+      </div>
+      <div class="master-usage">
+        <span>Ukupan API budzet</span>
+        <strong>${formatMoney(totals.estimatedCost)} / ${formatMoney(totals.monthlyLimitUsd)}</strong>
+        ${usageBar(totals.percentRemaining ?? 100, "preostalo")}
+      </div>
+    </section>
+
+    <section class="stat-grid">
+      ${statCard("Klijenti", totals.clients || 0, "Aktivni tenant profili")}
+      ${statCard("Poruke danas", totals.messagesToday || 0, "Sve ulazne i bot poruke")}
+      ${statCard("Odgovori bota", totals.botRepliesToday || 0, "Automatski odgovori danas")}
+      ${statCard("Razgovori", totals.conversations || 0, "Ukupno sacuvani razgovori")}
+      ${statCard("Narudzbine", totals.orders || 0, "Zabelezeni leadovi")}
+      ${statCard("Reklamacije", totals.complaints || 0, "Zamene, kasnjenja i problemi")}
+      ${statCard("Handoff", totals.handoffs || 0, "Treba ljudska provera")}
+      ${statCard("Potroseno", `${totals.percentUsed || 0}%`, "Ukupan API usage")}
+    </section>
+
+    ${section(
+      "Biznisi",
+      `<div class="business-list">
+        ${items.map(dashboardBusinessItem).join("") || `<div class="empty-state">Nema dodatih klijenata.</div>`}
+      </div>`
+    )}
+
+    ${section(
+      "Kako da naucis agenta",
+      `<div class="learning-grid">
+        <article>
+          <h3>1. Ubaci URL shopa</h3>
+          <p>U profilu klijenta upisi URL sajta i pokreni sync. Bot ce izvuci proizvode, cene, politiku dostave, rokove izrade i FAQ tekstove u bazu znanja.</p>
+        </article>
+        <article>
+          <h3>2. Dodaj tacna pravila</h3>
+          <p>U sekciji Znanje unesi pravila za cenu dostave, zamene, reklamacije, rokove slanja i frazu za porucivanje. Sve sto nije 100% poznato vodi se na handoff.</p>
+        </article>
+        <article>
+          <h3>3. Testiraj pre pustanja</h3>
+          <p>U Test sekciji probaj pitanja za cenu, sliku proizvoda, kasnjenje posiljke, zamenu i narudzbinu. Kad odgovori zvuce prirodno, ukljuci slanje za Meta kanal.</p>
+        </article>
+      </div>`
+    )}
+  `;
+
+  panels.dashboard.querySelectorAll("[data-open-dashboard-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      currentTenantId = button.dataset.openDashboardTenant;
+      dirty = false;
+      await loadTenantWorkspace();
+      activateTab("business");
+      setSaved("Ucitano", true);
+    });
+  });
+}
+
+function dashboardBusinessItem(tenant) {
+  const remaining = Math.max(0, 100 - Number(tenant.usage?.percentUsed || 0));
+  return `<article class="business-row">
+    <div class="business-main">
+      <h3>${escapeHtml(tenant.business?.name || tenant.name)}</h3>
+      <span>${escapeHtml(tenant.ownerEmail || "nema email")} · ${escapeHtml(tenant.id)}</span>
+      <small>${escapeHtml(tenant.business?.sourceUrl || "shop URL nije ubacen")}</small>
+    </div>
+    <div class="business-metric">
+      <strong>${tenant.stats?.botRepliesToday || 0}</strong>
+      <span>odgovora danas</span>
+    </div>
+    <div class="business-metric">
+      <strong>${tenant.stats?.orders || 0}</strong>
+      <span>narudzbine</span>
+    </div>
+    <div class="business-metric">
+      <strong>${tenant.stats?.handoffs || 0}</strong>
+      <span>handoff</span>
+    </div>
+    <div class="business-usage">
+      <div>
+        <strong>${remaining}%</strong>
+        <span>API preostalo</span>
+      </div>
+      ${usageBar(remaining, "preostalo")}
+    </div>
+    <button data-open-dashboard-tenant="${escapeAttr(tenant.id)}" class="primary">Otvori</button>
+  </article>`;
+}
+
+function statCard(label, value, hint) {
+  return `<article class="stat-card">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value)}</strong>
+    <small>${escapeHtml(hint)}</small>
+  </article>`;
+}
+
+function usageBar(value, label = "") {
+  const safeValue = Math.max(0, Math.min(100, Number(value || 0)));
+  return `<div class="usage-bar large" aria-label="${escapeAttr(label)}" style="--usage: ${safeValue}%"><span></span></div>`;
 }
 
 function renderTenantSelect() {
@@ -888,6 +1002,11 @@ function slug(value) {
     .trim()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function formatMoney(value) {
+  const number = Number(value || 0);
+  return `$${number.toFixed(number >= 10 ? 2 : 4)}`;
 }
 
 function escapeHtml(value) {

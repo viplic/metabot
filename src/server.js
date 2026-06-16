@@ -268,6 +268,10 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, getMetrics());
   }
 
+  if (request.method === "GET" && url.pathname === "/api/dashboard") {
+    return sendJson(response, 200, await buildDashboardSummary());
+  }
+
   if (request.method === "GET" && url.pathname === "/api/config") {
     return sendJson(response, 200, await loadTenantConfig(url.searchParams.get("tenantId") || DEFAULT_TENANT_ID));
   }
@@ -633,6 +637,101 @@ function estimateModelCost(model, input = "", output = "") {
     normalized.includes("5.5") ? 3 :
     1;
   return Number(((tokens / 1_000_000) * perMillion).toFixed(6));
+}
+
+async function buildDashboardSummary() {
+  const tenants = await loadTenants();
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const rows = await Promise.all(
+    tenants.map(async (tenant) => {
+      const config = await loadTenantConfig(tenant.id);
+      const conversations = pruneExpiredConversations(await loadConversations(tenant.id), config.privacy.retentionDays);
+      const store = await loadTenantStore(tenant.id);
+      const usageSummary = summarizeUsage(store, config.usage?.monthlyLimitUsd || 0);
+      const messagesToday = conversations.reduce((sum, conversation) => {
+        return sum + (conversation.messages || []).filter((message) => {
+          const createdAt = message.createdAt || message.timestamp || message.at || "";
+          return String(createdAt).startsWith(todayPrefix);
+        }).length;
+      }, 0);
+      const botRepliesToday = conversations.reduce((sum, conversation) => {
+        return sum + (conversation.messages || []).filter((message) => {
+          const createdAt = message.createdAt || message.timestamp || message.at || "";
+          const actor = message.actor || message.role || message.from || message.sender || "";
+          return String(createdAt).startsWith(todayPrefix) && /bot|assistant|ai/i.test(String(actor));
+        }).length;
+      }, 0);
+      const lastActivityAt = conversations
+        .flatMap((conversation) => [
+          conversation.lastUserAt,
+          conversation.lastBotAt,
+          conversation.updatedAt,
+          conversation.openedAt
+        ])
+        .filter(Boolean)
+        .sort()
+        .at(-1) || null;
+
+      return {
+        ...publicTenant(tenant),
+        stats: {
+          conversations: conversations.length,
+          handoffs: conversations.filter((conversation) => conversation.status === "handoff").length,
+          activeChannels: (config.channels || []).filter((channel) => channel.enabled).length,
+          products: store.catalog?.products?.length || config.catalog?.products?.length || 0,
+          orders: store.orders.filter((order) => order.type === "order").length,
+          complaints: store.orders.filter((order) => order.type && order.type !== "order").length,
+          messagesToday,
+          botRepliesToday,
+          lastActivityAt
+        },
+        usage: usageSummary,
+        business: {
+          name: config.business?.name || tenant.name,
+          sourceUrl: config.catalog?.sourceUrl || store.catalog?.sourceUrl || "",
+          provider: config.ai?.provider || "openai",
+          model: config.ai?.model || "",
+          apiKeyEnv: config.ai?.apiKeyEnv || "",
+          sheetUrl: config.integrations?.googleSheets?.sheetUrl || "",
+          sheetsEnabled: Boolean(config.integrations?.googleSheets?.enabled)
+        }
+      };
+    })
+  );
+
+  const totals = rows.reduce((acc, tenant) => {
+    acc.clients += 1;
+    acc.conversations += tenant.stats.conversations;
+    acc.messagesToday += tenant.stats.messagesToday;
+    acc.botRepliesToday += tenant.stats.botRepliesToday;
+    acc.handoffs += tenant.stats.handoffs;
+    acc.orders += tenant.stats.orders;
+    acc.complaints += tenant.stats.complaints;
+    acc.estimatedCost += tenant.usage.estimatedCost || 0;
+    acc.monthlyLimitUsd += tenant.usage.monthlyLimitUsd || 0;
+    return acc;
+  }, {
+    clients: 0,
+    conversations: 0,
+    messagesToday: 0,
+    botRepliesToday: 0,
+    handoffs: 0,
+    orders: 0,
+    complaints: 0,
+    estimatedCost: 0,
+    monthlyLimitUsd: 0
+  });
+
+  totals.percentUsed = totals.monthlyLimitUsd > 0
+    ? Math.min(100, Math.round((totals.estimatedCost / totals.monthlyLimitUsd) * 100))
+    : 0;
+  totals.percentRemaining = Math.max(0, 100 - totals.percentUsed);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals,
+    tenants: rows.sort((a, b) => String(b.stats.lastActivityAt || "").localeCompare(String(a.stats.lastActivityAt || "")))
+  };
 }
 
 function mergeKnowledgeDocuments(existing, incoming) {
