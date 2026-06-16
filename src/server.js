@@ -62,7 +62,7 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml"
 };
 
-const server = http.createServer(async (request, response) => {
+export async function handleRequest(request, response) {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
@@ -94,12 +94,15 @@ const server = http.createServer(async (request, response) => {
       message: error.message
     });
   }
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`Meta bot console: http://localhost:${PORT}`);
-  console.log(`Webhook endpoint: http://localhost:${PORT}/webhook`);
-});
+if (!process.env.VERCEL) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, () => {
+    console.log(`Meta bot console: http://localhost:${PORT}`);
+    console.log(`Webhook endpoint: http://localhost:${PORT}/webhook`);
+  });
+}
 
 async function handleWebhookVerify(url, response) {
   const config = await loadTenantConfig(tenantIdFromWebhookPath(url.pathname));

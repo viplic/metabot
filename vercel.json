@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "env": {
+    "DATA_DIR": "/tmp/metabot-data"
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-const DATA_DIR = path.resolve("data");
+const DATA_DIR = path.resolve(process.env.DATA_DIR || "data");
 const CONVERSATIONS_PATH = path.join(DATA_DIR, "conversations.json");
 const RAW_EVENTS_PATH = path.join(DATA_DIR, "raw-events.jsonl");
 const PROCESSED_EVENTS_PATH = path.join(DATA_DIR, "processed-events.json");

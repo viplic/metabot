@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const DATA_DIR = path.resolve("data");
+const DATA_DIR = path.resolve(process.env.DATA_DIR || "data");
 const TENANT_DIR = path.join(DATA_DIR, "tenants");
 
 export async function loadTenantStore(tenantId) {
