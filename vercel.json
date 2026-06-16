@@ -3,10 +3,10 @@
   "env": {
     "DATA_DIR": "/tmp/metabot-data"
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/api"
+      "src": "/(.*)",
+      "dest": "/api/index.js"
     }
   ]
 }
