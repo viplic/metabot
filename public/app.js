@@ -1069,6 +1069,7 @@ function normalizeClientConfig(value) {
   normalized.integrations ||= {};
   normalized.integrations.googleSheets ||= {};
   normalized.integrations.googleSheets.webhookUrlEnv ||= "";
+  normalized.integrations.googleSheets.webhookUrl ||= "";
   normalized.integrations.googleSheets.sheetUrl ||= "";
   return normalized;
 }

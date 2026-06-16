@@ -73,6 +73,7 @@ function normalizeClientConfig(value) {
   normalized.integrations ||= {};
   normalized.integrations.googleSheets ||= {};
   normalized.integrations.googleSheets.webhookUrlEnv ||= "";
+  normalized.integrations.googleSheets.webhookUrl ||= "";
   normalized.integrations.googleSheets.sheetUrl ||= "";
   return normalized;
 }
@@ -194,6 +195,7 @@ function renderBusiness() {
       ${checkboxField("Automatski osvezavaj sajt", config.catalog.autoRefreshEnabled, (value) => (config.catalog.autoRefreshEnabled = value))}
       ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
       ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
+      ${textField("Google Sheet webhook URL", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
     </div>`
   );
   panels.business.insertAdjacentHTML(

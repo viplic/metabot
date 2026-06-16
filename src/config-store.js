@@ -367,6 +367,7 @@ export function normalizeConfig(config) {
   normalized.integrations.googleSheets = {
     enabled: Boolean(normalized.integrations.googleSheets?.enabled),
     webhookUrlEnv: normalized.integrations.googleSheets?.webhookUrlEnv || "",
+    webhookUrl: normalized.integrations.googleSheets?.webhookUrl || "",
     sheetUrl: normalized.integrations.googleSheets?.sheetUrl || ""
   };
   normalized.knowledge = normalized.knowledge || {};
