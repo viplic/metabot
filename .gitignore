@@ -9,3 +9,4 @@ data/tenants.json
 data/tenants/
 clowbot/
 *.log
+.vercel
