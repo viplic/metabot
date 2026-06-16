@@ -8,11 +8,10 @@ const bindQueue = [];
 
 const panels = {
   login: document.querySelector("#tab-login"),
+  dashboard: document.querySelector("#tab-dashboard"),
   business: document.querySelector("#tab-business"),
   channels: document.querySelector("#tab-channels"),
-  knowledge: document.querySelector("#tab-knowledge"),
-  ai: document.querySelector("#tab-ai"),
-  test: document.querySelector("#tab-test")
+  knowledge: document.querySelector("#tab-knowledge")
 };
 
 document.querySelectorAll(".tabs button").forEach((button) => {
@@ -37,7 +36,7 @@ async function boot() {
   if (session?.tenantId && session?.token) {
     try {
       await loadPortal();
-      activateTab("business");
+      activateTab("dashboard");
       setSaved("Učitano", true);
     } catch {
       localStorage.removeItem("metabot-client-session");
@@ -86,11 +85,10 @@ function renderAll() {
     return;
   }
   document.querySelector("#portalTitle").textContent = `${tenant.name} bot`;
+  renderDashboard();
   renderBusiness();
   renderChannels();
   renderKnowledge();
-  renderAi();
-  renderTest();
   renderSidebar();
 }
 
@@ -124,12 +122,49 @@ function renderLogin() {
       session = { tenantId: result.tenant.id, token: result.token };
       localStorage.setItem("metabot-client-session", JSON.stringify(session));
       await loadPortal();
-      activateTab("business");
+      activateTab("dashboard");
       setSaved("Ulogovan", true);
     } catch {
       setSaved("Pogrešan login", false, true);
     }
   });
+}
+
+function renderDashboard() {
+  const metrics = portalMetrics();
+  panels.dashboard.innerHTML = `
+    <section class="client-focus-hero" style="--client-color: ${escapeAttr(tenant.color || "#10b981")}; --usage: ${Math.min(100, metrics.botRepliesToday * 5)}%">
+      <div class="client-orbit">${metrics.botRepliesToday}</div>
+      <div>
+        <p class="eyebrow">Klijentski dashboard</p>
+        <h2>${escapeHtml(tenant.name)}</h2>
+        <p>Ovde vidite samo brojeve i statuse. Sadrzaj razgovora nije prikazan u klijentskom portalu.</p>
+      </div>
+      <div class="master-usage">
+        <span>Status bota</span>
+        <strong>${config.automation?.enabled !== false ? "Aktivan" : "Pauziran"}</strong>
+        <small>${metrics.activeChannels} aktivna kanala</small>
+      </div>
+    </section>
+    <section class="stat-grid">
+      ${statCard("Poruke danas", metrics.messagesToday, "Ukupno registrovano")}
+      ${statCard("Odgovori bota", metrics.botRepliesToday, "Bez prikaza teksta")}
+      ${statCard("Narudzbine", metrics.orders, "Poslate u Google Sheet kada je povezan")}
+      ${statCard("Reklamacije", metrics.complaints, "Zamene, kasnjenja i problemi")}
+      ${statCard("Handoff", metrics.handoffs, "Treba ljudska provera")}
+      ${statCard("Znanje", config.knowledge?.documents?.length || 0, "Dokumenti koje mozete menjati")}
+      ${statCard("Proizvodi", store?.catalog?.products?.length || 0, "Ucitan katalog")}
+      ${statCard("Kanali", metrics.activeChannels, "Instagram/Facebook")}
+    </section>
+    ${section(
+      "Google Sheet i podaci",
+      `<div class="test-result">
+        <span>Google Sheet: ${config.integrations?.googleSheets?.enabled ? "ukljucen" : "nije ukljucen"}</span>
+        <span>Sheet URL: ${escapeHtml(config.integrations?.googleSheets?.sheetUrl || "nije dodat")}</span>
+        <span>Razgovori se cuvaju 30 dana, a narudzbine ostaju sacuvane.</span>
+      </div>`
+    )}
+  `;
 }
 
 function renderLocked() {
@@ -157,9 +192,7 @@ function renderBusiness() {
       ${textField("URL sajta / shopa", config.catalog.sourceUrl, (value) => (config.catalog.sourceUrl = value), "full")}
       ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
       ${checkboxField("Automatski osvezavaj sajt", config.catalog.autoRefreshEnabled, (value) => (config.catalog.autoRefreshEnabled = value))}
-      ${numberField("Mesecni AI limit ($)", config.usage.monthlyLimitUsd, (value) => (config.usage.monthlyLimitUsd = Number(value)))}
       ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
-      ${textField("Google Sheet webhook env", config.integrations.googleSheets.webhookUrlEnv, (value) => (config.integrations.googleSheets.webhookUrlEnv = value))}
       ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
   );
@@ -193,59 +226,24 @@ function renderBusiness() {
 function renderChannels() {
   panels.channels.innerHTML = section(
     "Meta profili",
-    `<div class="collection">${config.channels.map(channelItem).join("")}</div>
-    <div class="actions">
-      <button data-add-channel="messenger">Dodaj Messenger</button>
-      <button data-add-channel="instagram">Dodaj Instagram</button>
-    </div>
+    `<div class="collection">${config.channels.map(channelItem).join("") || `<div class="empty-state">Admin jos nije povezao kanale.</div>`}</div>
     <div class="field full">
       <label>Webhook URL za ovaj portal</label>
       <input readonly value="${escapeAttr(`${window.location.origin}/webhook/${tenant.id}`)}" />
     </div>`
   );
-  bindInputs(panels.channels);
-  panels.channels.querySelectorAll("[data-add-channel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const type = button.dataset.addChannel;
-      config.channels.push({
-        id: `${type}-${Date.now()}`,
-        type,
-        name: type === "instagram" ? "Instagram Direct" : "Facebook Messenger",
-        enabled: true,
-        pageId: "",
-        igAccountId: "",
-        sendEnabled: false,
-        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
-      });
-      markDirty();
-      renderChannels();
-      renderSidebar();
-    });
-  });
-  panels.channels.querySelectorAll("[data-remove-channel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      config.channels = config.channels.filter((channel) => channel.id !== button.dataset.removeChannel);
-      markDirty();
-      renderChannels();
-      renderSidebar();
-    });
-  });
 }
 
 function channelItem(channel) {
   return `<article class="item">
     <div class="item-header">
       <h3>${escapeHtml(channel.name)}</h3>
-      <button class="danger" data-remove-channel="${escapeAttr(channel.id)}">Ukloni</button>
+      <span class="pill">${channel.enabled ? "aktivan" : "pauziran"}</span>
     </div>
     <div class="grid three">
-      ${checkboxField("Aktivan", channel.enabled, (value) => (channel.enabled = value))}
-      ${checkboxField("Slanje uključeno", channel.sendEnabled, (value) => (channel.sendEnabled = value))}
-      ${selectField("Tip", channel.type, ["messenger", "instagram"], (value) => (channel.type = value))}
-      ${textField("Naziv", channel.name, (value) => (channel.name = value))}
-      ${textField("Page ID", channel.pageId, (value) => (channel.pageId = value))}
-      ${textField("IG Account ID", channel.igAccountId, (value) => (channel.igAccountId = value))}
-      ${textField("Token env", channel.pageAccessTokenEnv, (value) => (channel.pageAccessTokenEnv = value), "full")}
+      <div class="test-result"><span>Tip: ${escapeHtml(channel.type)}</span></div>
+      <div class="test-result"><span>Slanje: ${channel.sendEnabled ? "ukljuceno" : "nije ukljuceno"}</span></div>
+      <div class="test-result"><span>Admin podesava Page/IG tokene.</span></div>
     </div>
   </article>`;
 }
@@ -299,62 +297,15 @@ function knowledgeItem(document) {
   </article>`;
 }
 
-function renderAi() {
-  panels.ai.innerHTML = section(
-    "AI podešavanja",
-    `<div class="grid">
-      ${checkboxField("AI uključen", config.ai.enabled, (value) => (config.ai.enabled = value))}
-      ${selectField("Provider", config.ai.provider, ["openai", "gemini"], (value) => (config.ai.provider = value))}
-      ${textField("Glavni model", config.ai.model, (value) => (config.ai.model = value))}
-      ${textField("API key env", config.ai.apiKeyEnv, (value) => (config.ai.apiKeyEnv = value))}
-      ${checkboxField("Automatski izbor modela", config.ai.modelRouting.enabled, (value) => (config.ai.modelRouting.enabled = value))}
-      ${textField("Laka pitanja", config.ai.modelRouting.simpleModel, (value) => (config.ai.modelRouting.simpleModel = value))}
-      ${textField("Srednja pitanja", config.ai.modelRouting.standardModel, (value) => (config.ai.modelRouting.standardModel = value))}
-      ${textField("Zahtevna pitanja", config.ai.modelRouting.complexModel, (value) => (config.ai.modelRouting.complexModel = value))}
-      ${textField("Slike", config.ai.modelRouting.visionModel, (value) => (config.ai.modelRouting.visionModel = value))}
-      ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
-    </div>`
-  );
-  bindInputs(panels.ai);
-}
-
-function renderTest() {
-  panels.test.innerHTML = section(
-    "Test bota",
-    `<div class="grid">
-      ${selectField("Kanal", "messenger", ["messenger", "instagram"], null, "", "testChannel")}
-      <div class="field full">
-        <label for="testText">Poruka</label>
-        <textarea id="testText">Koje je radno vreme?</textarea>
-      </div>
-    </div>
-    <div class="actions"><button id="runTest" class="primary">Testiraj</button></div>
-    <div id="testResult" class="test-result"></div>`
-  );
-  panels.test.querySelector("#runTest").addEventListener("click", async () => {
-    const payload = await clientFetch("/client-api/test-message", {
-      method: "POST",
-      body: JSON.stringify({
-        channelType: panels.test.querySelector("#testChannel").value,
-        text: panels.test.querySelector("#testText").value
-      })
-    });
-    panels.test.querySelector("#testResult").innerHTML = `
-      <span class="pill">${escapeHtml(payload.result.action)}</span>
-      <strong>${escapeHtml(payload.result.reply)}</strong>
-      <span>Razlog: ${escapeHtml(payload.result.reason)} | Pouzdanje: ${payload.result.confidence}</span>
-    `;
-  });
-}
-
 function renderSidebar() {
-  const usage = store?.usageSummary || {};
+  const metrics = portalMetrics();
   document.querySelector("#statusList").innerHTML = tenant
     ? `<dt>Klijent</dt><dd>${escapeHtml(tenant.id)}</dd>
       <dt>Profili</dt><dd>${config?.channels?.filter((channel) => channel.enabled).length || 0}</dd>
       <dt>AI</dt><dd>${config?.ai?.enabled ? "on" : "off"}</dd>
-      <dt>API usage</dt><dd>${usage.percentUsed || 0}%</dd>
-      <dt>Orders</dt><dd>${store?.orders?.length || 0}</dd>
+      <dt>Odgovori danas</dt><dd>${metrics.botRepliesToday}</dd>
+      <dt>Narudzbine</dt><dd>${metrics.orders}</dd>
+      <dt>Reklamacije</dt><dd>${metrics.complaints}</dd>
       <dt>Webhook</dt><dd>${escapeHtml(`${window.location.origin}/webhook/${tenant.id}`)}</dd>`
     : `<dt>Status</dt><dd>Nije ulogovan</dd>`;
 
@@ -363,21 +314,47 @@ function renderSidebar() {
       ...(store?.orders || []).slice(0, 5).map((order) => ({
         channelType: order.type,
         status: order.status,
-        platformUserId: order.customer?.phone || order.platformUserId || "narudzbina",
-        messages: [{ body: `${order.customer?.name || ""} ${order.product?.name || ""}`.trim() || order.notes }]
-      })),
-      ...conversations
+        platformUserId: order.customer?.phone || order.platformUserId || "narudzbina"
+      }))
     ]
       .slice(0, 12)
-      .map((conversation) => {
-        const last = conversation.messages?.at(-1);
-        return `<article class="conversation">
+      .map((conversation) => `<article class="conversation">
           <strong>${escapeHtml(conversation.channelType)} · ${escapeHtml(conversation.status)}</strong>
           <span>${escapeHtml(conversation.platformUserId)}</span>
-          <span>${escapeHtml(last?.body || "Nema poruka")}</span>
-        </article>`;
-      })
-      .join("") || `<span class="conversation">Nema razgovora</span>`;
+          <span>Sadrzaj poruka nije prikazan.</span>
+        </article>`)
+      .join("") || `<span class="conversation">Nema aktivnosti</span>`;
+}
+
+function portalMetrics() {
+  const today = new Date().toISOString().slice(0, 10);
+  const messagesToday = conversations.reduce((sum, conversation) => {
+    return sum + (conversation.messages || []).filter((message) => String(message.createdAt || "").startsWith(today)).length;
+  }, 0);
+  const botRepliesToday = conversations.reduce((sum, conversation) => {
+    return sum + (conversation.messages || []).filter((message) => {
+      const sender = message.sender || message.actor || message.role || "";
+      return String(message.createdAt || "").startsWith(today) && /bot|assistant|ai/i.test(String(sender));
+    }).length;
+  }, 0);
+  const orders = (store?.orders || []).filter((order) => order.type === "order").length;
+  const complaints = (store?.orders || []).filter((order) => order.type && order.type !== "order").length;
+  return {
+    messagesToday,
+    botRepliesToday,
+    orders,
+    complaints,
+    handoffs: conversations.filter((conversation) => conversation.status === "handoff").length,
+    activeChannels: config?.channels?.filter((channel) => channel.enabled).length || 0
+  };
+}
+
+function statCard(label, value, hint) {
+  return `<article class="stat-card">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value)}</strong>
+    <small>${escapeHtml(hint)}</small>
+  </article>`;
 }
 
 async function save() {

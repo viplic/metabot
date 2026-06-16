@@ -101,37 +101,43 @@ function renderAll() {
 }
 
 function renderDashboard() {
-  const totals = dashboard?.totals || {};
   const items = dashboard?.tenants || [];
+  const selected = items.find((item) => item.id === currentTenantId) || items[0] || {};
+  const stats = selected.stats || {};
+  const usage = selected.usage || {};
+  const remaining = Math.max(0, 100 - Number(usage.percentUsed || 0));
   panels.dashboard.innerHTML = `
-    <section class="dashboard-hero">
+    <section class="client-focus-hero" style="--client-color: ${escapeAttr(selected.color || "#10b981")}; --usage: ${remaining}%">
+      <div class="client-orbit">${remaining}%</div>
       <div>
-        <p class="eyebrow">Master admin</p>
-        <h2>Glavni dashboard za sve klijente</h2>
-        <p>Jedan pregled za sve biznise, dnevne odgovore, potrosnju API-ja, narudzbine, reklamacije i statuse integracija.</p>
+        <p class="eyebrow">Izabrani klijent</p>
+        <h2>${escapeHtml(selected.business?.name || selected.name || "Nema klijenta")}</h2>
+        <p>${escapeHtml(selected.niche || selected.business?.sourceUrl || "Izaberi klijenta iz padajuceg menija da vidis samo njegove podatke.")}</p>
       </div>
       <div class="master-usage">
-        <span>Ukupan API budzet</span>
-        <strong>${formatMoney(totals.estimatedCost)} / ${formatMoney(totals.monthlyLimitUsd)}</strong>
-        ${usageBar(totals.percentRemaining ?? 100, "preostalo")}
+        <span>API budzet ovog klijenta</span>
+        <strong>${formatMoney(usage.estimatedCost)} / ${formatMoney(usage.monthlyLimitUsd)}</strong>
+        ${usageBar(remaining, "preostalo")}
       </div>
     </section>
 
     <section class="stat-grid">
-      ${statCard("Klijenti", totals.clients || 0, "Aktivni tenant profili")}
-      ${statCard("Poruke danas", totals.messagesToday || 0, "Sve ulazne i bot poruke")}
-      ${statCard("Odgovori bota", totals.botRepliesToday || 0, "Automatski odgovori danas")}
-      ${statCard("Razgovori", totals.conversations || 0, "Ukupno sacuvani razgovori")}
-      ${statCard("Narudzbine", totals.orders || 0, "Zabelezeni leadovi")}
-      ${statCard("Reklamacije", totals.complaints || 0, "Zamene, kasnjenja i problemi")}
-      ${statCard("Handoff", totals.handoffs || 0, "Treba ljudska provera")}
-      ${statCard("Potroseno", `${totals.percentUsed || 0}%`, "Ukupan API usage")}
+      ${statCard("Poruke danas", stats.messagesToday || 0, "Samo ovaj klijent")}
+      ${statCard("Odgovori bota", stats.botRepliesToday || 0, "Automatski odgovori danas")}
+      ${statCard("Razgovori", stats.conversations || 0, "Cuvaju se 30 dana")}
+      ${statCard("Narudzbine", stats.orders || 0, "Zabelezeni leadovi")}
+      ${statCard("Reklamacije", stats.complaints || 0, "Zamene, kasnjenja i problemi")}
+      ${statCard("Handoff", stats.handoffs || 0, "Treba ljudska provera")}
+      ${statCard("Proizvodi", stats.products || 0, "Iz ucitanog shopa")}
+      ${statCard("Kanali", stats.activeChannels || 0, "Instagram/Facebook")}
     </section>
 
     ${section(
-      "Biznisi",
-      `<div class="business-list">
-        ${items.map(dashboardBusinessItem).join("") || `<div class="empty-state">Nema dodatih klijenata.</div>`}
+      "Brzi izbor klijenta",
+      `<div class="tenant-color-strip">
+        ${items.map((tenant) => `<button class="${tenant.id === currentTenantId ? "active" : ""}" data-open-dashboard-tenant="${escapeAttr(tenant.id)}" style="--client-color: ${escapeAttr(tenant.color || "#10b981")}">
+          <span></span>${escapeHtml(tenant.name)}
+        </button>`).join("") || `<div class="empty-state">Nema dodatih klijenata.</div>`}
       </div>`
     )}
 
@@ -217,23 +223,53 @@ function renderTenantSelect() {
 }
 
 function renderTenants() {
+  const pending = tenants.filter((tenant) => tenant.status === "pending");
+  const active = tenants.filter((tenant) => tenant.status !== "pending");
   panels.tenants.innerHTML = section(
-    "Klijenti i profili",
-    `<div class="collection">
-      ${tenants.map(tenantItem).join("")}
+    "Klijenti - logican flow",
+    `<div class="setup-flow">
+      <article><span>1</span><strong>Prijava ili rucni unos</strong><small>Klijent salje signup ili ga ti dodas.</small></article>
+      <article><span>2</span><strong>Odobrenje</strong><small>Pending zahtev dobija login tek kad ga odobris.</small></article>
+      <article><span>3</span><strong>Podesavanje</strong><small>API, kanali, shop, Google Sheet i znanje.</small></article>
+      <article><span>4</span><strong>Pokretanje</strong><small>Ukljucis slanje i pratis dashboard.</small></article>
     </div>
-    <form id="addTenantForm" class="grid">
-      <div class="field">
-        <label for="newTenantName">Naziv klijenta</label>
-        <input id="newTenantName" name="name" placeholder="Novi klijent" />
-      </div>
-      <div class="field">
-        <label for="newTenantEmail">Email vlasnika</label>
-        <input id="newTenantEmail" name="ownerEmail" placeholder="klijent@example.com" />
-      </div>
-      <div class="actions full"><button class="primary">Dodaj klijenta</button></div>
-    </form>`
+    <div class="actions"><button id="showAddTenant" class="primary">Dodaj novog klijenta</button></div>
+    <div id="addTenantPanel" class="wizard-panel" hidden>
+      <form id="addTenantForm" class="wizard-grid">
+        <section>
+          <h3>1. Osnovno</h3>
+          <div class="field"><label for="newTenantName">Naziv klijenta</label><input id="newTenantName" name="name" required placeholder="Novi klijent" /></div>
+          <div class="field"><label for="newTenantEmail">Email vlasnika</label><input id="newTenantEmail" name="ownerEmail" type="email" placeholder="klijent@example.com" /></div>
+          <div class="field"><label for="newTenantNiche">Niche</label><input id="newTenantNiche" name="niche" placeholder="Odeca, nakit, custom pokloni..." /></div>
+        </section>
+        <section>
+          <h3>2. AI i API</h3>
+          <div class="field"><label for="newTenantApiEnv">API key env</label><input id="newTenantApiEnv" name="apiKeyEnv" placeholder="OPENAI_API_KEY_KLIJENT" /></div>
+          <div class="field"><label for="newTenantModel">Model</label><input id="newTenantModel" name="model" value="gpt-4.1-mini" /></div>
+          <div class="field"><label for="newTenantLimit">Mesecni limit ($)</label><input id="newTenantLimit" name="monthlyLimitUsd" type="number" value="20" /></div>
+        </section>
+        <section>
+          <h3>3. Kanali</h3>
+          <label class="toggle-row"><input name="messenger" type="checkbox" checked /><span>Facebook Messenger</span></label>
+          <label class="toggle-row"><input name="instagram" type="checkbox" checked /><span>Instagram Direct</span></label>
+        </section>
+        <section>
+          <h3>4. Shop i Sheet</h3>
+          <div class="field"><label for="newTenantSite">URL sajta</label><input id="newTenantSite" name="sourceUrl" placeholder="https://shop.com" /></div>
+          <div class="field"><label for="newTenantSheet">Google Sheet URL</label><input id="newTenantSheet" name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/..." /></div>
+        </section>
+        <div class="actions full"><button class="primary">Kreiraj i otvori podesavanja</button></div>
+      </form>
+    </div>
+    ${pending.length ? `<h2>Pending prijave</h2><div class="collection">${pending.map(tenantItem).join("")}</div>` : ""}
+    <h2>Aktivni i ostali klijenti</h2>
+    <div class="collection">${active.map(tenantItem).join("")}</div>`
   );
+
+  panels.tenants.querySelector("#showAddTenant").addEventListener("click", () => {
+    const panel = panels.tenants.querySelector("#addTenantPanel");
+    panel.hidden = !panel.hidden;
+  });
 
   panels.tenants.querySelector("#addTenantForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -242,8 +278,42 @@ function renderTenants() {
       method: "POST",
       body: JSON.stringify({
         name: form.get("name"),
-        ownerEmail: form.get("ownerEmail")
+        ownerEmail: form.get("ownerEmail"),
+        niche: form.get("niche")
       })
+    });
+    const createdConfig = normalizeClientConfig(await fetchJson(`/api/tenants/${encodeURIComponent(tenant.id)}/config`));
+    createdConfig.ai.apiKeyEnv = form.get("apiKeyEnv") || createdConfig.ai.apiKeyEnv;
+    createdConfig.ai.model = form.get("model") || createdConfig.ai.model;
+    createdConfig.usage.monthlyLimitUsd = Number(form.get("monthlyLimitUsd") || 20);
+    createdConfig.catalog.sourceUrl = form.get("sourceUrl") || "";
+    createdConfig.integrations.googleSheets.enabled = Boolean(form.get("sheetUrl"));
+    createdConfig.integrations.googleSheets.sheetUrl = form.get("sheetUrl") || "";
+    createdConfig.channels = [
+      ...(form.get("messenger") ? [{
+        id: `messenger-${Date.now()}`,
+        type: "messenger",
+        name: "Facebook Messenger",
+        enabled: true,
+        pageId: "",
+        igAccountId: "",
+        sendEnabled: false,
+        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
+      }] : []),
+      ...(form.get("instagram") ? [{
+        id: `instagram-${Date.now()}`,
+        type: "instagram",
+        name: "Instagram Direct",
+        enabled: true,
+        pageId: "",
+        igAccountId: "",
+        sendEnabled: false,
+        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
+      }] : [])
+    ];
+    await fetchJson(`/api/tenants/${encodeURIComponent(tenant.id)}/config`, {
+      method: "PUT",
+      body: JSON.stringify(createdConfig)
     });
     tenants = await fetchJson("/api/tenants");
     currentTenantId = tenant.id;
@@ -273,6 +343,31 @@ function renderTenants() {
       window.alert(`Client login:\n${window.location.origin}/client.html?tenant=${access.tenantId}\n\nPassword:\n${access.password}`);
     });
   });
+
+  panels.tenants.querySelectorAll("[data-approve-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const access = await fetchJson(`/api/tenants/${encodeURIComponent(button.dataset.approveTenant)}/approve`, {
+        method: "POST",
+        body: "{}"
+      });
+      tenants = await fetchJson("/api/tenants");
+      window.alert(`Klijent odobren:\n${window.location.origin}/client.html?tenant=${access.tenantId}\n\nPassword:\n${access.password}`);
+      renderTenants();
+      renderTenantSelect();
+    });
+  });
+
+  panels.tenants.querySelectorAll("[data-reject-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await fetchJson(`/api/tenants/${encodeURIComponent(button.dataset.rejectTenant)}/reject`, {
+        method: "POST",
+        body: "{}"
+      });
+      tenants = await fetchJson("/api/tenants");
+      renderTenants();
+      renderTenantSelect();
+    });
+  });
 }
 
 function tenantItem(tenant) {
@@ -283,12 +378,13 @@ function tenantItem(tenant) {
       <h3>${escapeHtml(tenant.name)}</h3>
       <div class="actions">
         <button data-open-tenant="${escapeAttr(tenant.id)}">Otvori</button>
-        <button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>
+        ${tenant.status === "pending" ? `<button class="primary" data-approve-tenant="${escapeAttr(tenant.id)}">Odobri</button><button class="danger" data-reject-tenant="${escapeAttr(tenant.id)}">Odbij</button>` : `<button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>`}
       </div>
     </div>
     <dl class="mini-stats">
       <dt>ID</dt><dd>${escapeHtml(tenant.id)}</dd>
       <dt>Status</dt><dd>${escapeHtml(tenant.status)}</dd>
+      <dt>Niche</dt><dd>${escapeHtml(tenant.niche || "-")}</dd>
       <dt>Razgovori</dt><dd>${stats.conversations || 0}</dd>
       <dt>Handoff</dt><dd>${stats.handoffs || 0}</dd>
       <dt>API env</dt><dd>${escapeHtml(tenant.id === currentTenantId ? config.ai.apiKeyEnv : "otvori klijenta")}</dd>

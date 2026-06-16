@@ -4,8 +4,13 @@ CREATE TABLE IF NOT EXISTS tenants (
   owner_email TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active',
   plan TEXT NOT NULL DEFAULT 'client',
+  color TEXT DEFAULT '#10b981',
+  niche TEXT DEFAULT '',
+  signup_note TEXT DEFAULT '',
   portal_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   portal_password_hash TEXT DEFAULT '',
+  requested_at TIMESTAMPTZ,
+  approved_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -87,4 +92,20 @@ CREATE TABLE IF NOT EXISTS learning_memories (
   suggested_answer TEXT DEFAULT '',
   source TEXT DEFAULT 'conversation',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS processed_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_events_tenant_time ON processed_events(tenant_id, processed_at DESC);
+
+CREATE TABLE IF NOT EXISTS raw_events (
+  id BIGSERIAL PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  platform_user_id TEXT DEFAULT '',
+  payload JSONB NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

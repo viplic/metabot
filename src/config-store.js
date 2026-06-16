@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
+import { getSql, hasDatabase, json } from "./db.js";
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "data");
 const DEFAULT_CONFIG_PATH = path.resolve("data/default-config.json");
@@ -33,29 +34,39 @@ export async function saveConfig(config) {
 }
 
 export async function loadTenants() {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const rows = await sql`
+      SELECT id, name, owner_email, status, plan, portal_enabled, portal_password_hash,
+             color, niche, signup_note, requested_at, approved_at, created_at, updated_at
+      FROM tenants
+      ORDER BY created_at ASC
+    `;
+    if (rows.length) return rows.map(dbTenantToTenant);
+    const initial = [defaultTenant()];
+    await saveTenants(initial);
+    return initial;
+  }
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   const tenants = await readTenantsFile();
   if (tenants.length) return tenants;
 
-  const now = new Date().toISOString();
-  const initial = [
-    {
-      id: DEFAULT_TENANT_ID,
-      name: "Moj servis",
-      ownerEmail: "",
-      status: "active",
-      plan: "owner",
-      portalEnabled: true,
-      portalPasswordHash: hashPortalPassword(process.env.ADMIN_TOKEN || "change-this-admin-token"),
-      createdAt: now,
-      updatedAt: now
-    }
-  ];
+  const initial = [defaultTenant()];
   await saveTenants(initial);
   return initial;
 }
 
 export async function saveTenants(tenants) {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const normalized = ensureArray(tenants).map(normalizeTenant);
+    for (const tenant of normalized) {
+      await upsertTenant(sql, tenant);
+    }
+    return normalized;
+  }
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   const normalized = ensureArray(tenants).map(normalizeTenant);
   const tempPath = `${TENANTS_PATH}.tmp`;
@@ -68,20 +79,31 @@ export async function createTenant(input = {}) {
   const tenants = await loadTenants();
   const id = uniqueTenantId(input.id || input.name || "klijent", tenants);
   const now = new Date().toISOString();
+  const portalPassword = input.portalPassword || generatePortalPassword();
   const tenant = normalizeTenant({
     id,
     name: input.name || `Klijent ${tenants.length + 1}`,
     ownerEmail: input.ownerEmail || "",
     status: input.status || "active",
     plan: input.plan || "client",
-    portalEnabled: true,
-    portalPasswordHash: hashPortalPassword(input.portalPassword || generatePortalPassword()),
+    color: input.color || colorForTenant(id),
+    niche: input.niche || "",
+    signupNote: input.signupNote || "",
+    portalEnabled: input.portalEnabled ?? input.status !== "pending",
+    portalPasswordHash: input.status === "pending" ? "" : hashPortalPassword(portalPassword),
+    requestedAt: input.status === "pending" ? now : input.requestedAt,
+    approvedAt: input.status === "active" ? now : input.approvedAt,
     createdAt: now,
     updatedAt: now
   });
 
-  tenants.push(tenant);
-  await saveTenants(tenants);
+  if (hasDatabase()) {
+    const sql = await getSql();
+    await upsertTenant(sql, tenant);
+  } else {
+    tenants.push(tenant);
+    await saveTenants(tenants);
+  }
 
   const defaults = normalizeConfig(await readJson(DEFAULT_CONFIG_PATH));
   const config = normalizeConfig({
@@ -96,6 +118,55 @@ export async function createTenant(input = {}) {
     }
   });
   await saveTenantConfig(tenant.id, config);
+  return { ...tenant, portalPassword: input.status === "pending" ? "" : portalPassword };
+}
+
+export async function submitTenantSignup(input = {}) {
+  return createTenant({
+    name: input.name,
+    ownerEmail: input.ownerEmail,
+    niche: input.niche,
+    signupNote: input.signupNote,
+    status: "pending",
+    plan: "client",
+    portalEnabled: false
+  });
+}
+
+export async function approveTenantSignup(tenantId) {
+  const id = normalizeTenantId(tenantId);
+  const tenants = await loadTenants();
+  const tenant = tenants.find((item) => item.id === id);
+  if (!tenant) {
+    const error = new Error(`Tenant not found: ${id}`);
+    error.statusCode = 404;
+    error.code = "tenant_not_found";
+    throw error;
+  }
+  const password = generatePortalPassword();
+  tenant.status = "active";
+  tenant.portalEnabled = true;
+  tenant.portalPasswordHash = hashPortalPassword(password);
+  tenant.approvedAt = new Date().toISOString();
+  tenant.updatedAt = tenant.approvedAt;
+  await saveTenants(tenants);
+  return { tenantId: id, password, tenant };
+}
+
+export async function rejectTenantSignup(tenantId) {
+  const id = normalizeTenantId(tenantId);
+  const tenants = await loadTenants();
+  const tenant = tenants.find((item) => item.id === id);
+  if (!tenant) {
+    const error = new Error(`Tenant not found: ${id}`);
+    error.statusCode = 404;
+    error.code = "tenant_not_found";
+    throw error;
+  }
+  tenant.status = "rejected";
+  tenant.portalEnabled = false;
+  tenant.updatedAt = new Date().toISOString();
+  await saveTenants(tenants);
   return tenant;
 }
 
@@ -112,6 +183,7 @@ export async function resetTenantPortalPassword(tenantId) {
 
   const password = generatePortalPassword();
   tenant.portalEnabled = true;
+  tenant.status = "active";
   tenant.portalPasswordHash = hashPortalPassword(password);
   tenant.updatedAt = new Date().toISOString();
   await saveTenants(tenants);
@@ -143,6 +215,24 @@ export async function requireTenantPortalToken(headers = {}) {
 
 export async function loadTenantConfig(tenantId = DEFAULT_TENANT_ID) {
   const id = normalizeTenantId(tenantId);
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const defaults = await readJson(DEFAULT_CONFIG_PATH);
+    const rows = await sql`SELECT config FROM tenant_configs WHERE tenant_id = ${id} LIMIT 1`;
+    if (rows.length) return normalizeConfig(deepMerge(defaults, rows[0].config));
+    const tenants = await loadTenants();
+    const tenant = tenants.find((item) => item.id === id);
+    if (!tenant && id !== DEFAULT_TENANT_ID) {
+      const error = new Error(`Tenant not found: ${id}`);
+      error.statusCode = 404;
+      error.code = "tenant_not_found";
+      throw error;
+    }
+    const config = tenantDefaultConfig(defaults, tenant || { id, name: "Moj servis" });
+    await saveTenantConfig(id, config);
+    return config;
+  }
+
   if (id === DEFAULT_TENANT_ID) return loadConfig();
 
   await ensureTenantExists(id);
@@ -156,17 +246,7 @@ export async function loadTenantConfig(tenantId = DEFAULT_TENANT_ID) {
     if (error.code !== "ENOENT") throw error;
     const tenants = await loadTenants();
     const tenant = tenants.find((item) => item.id === id);
-    const config = normalizeConfig({
-      ...defaults,
-      business: {
-        ...defaults.business,
-        name: tenant?.name || id
-      },
-      ai: {
-        ...defaults.ai,
-        apiKeyEnv: `OPENAI_API_KEY_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`
-      }
-    });
+    const config = tenantDefaultConfig(defaults, tenant || { id, name: id });
     await saveTenantConfig(id, config);
     return config;
   }
@@ -174,6 +254,17 @@ export async function loadTenantConfig(tenantId = DEFAULT_TENANT_ID) {
 
 export async function saveTenantConfig(tenantId = DEFAULT_TENANT_ID, config) {
   const id = normalizeTenantId(tenantId);
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const normalized = normalizeConfig(config);
+    await sql`
+      INSERT INTO tenant_configs (tenant_id, config, updated_at)
+      VALUES (${id}, ${json(normalized)}::jsonb, now())
+      ON CONFLICT (tenant_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()
+    `;
+    return normalized;
+  }
+
   if (id === DEFAULT_TENANT_ID) return saveConfig(config);
 
   await ensureTenantExists(id);
@@ -291,7 +382,7 @@ export function normalizeConfig(config) {
     content: document.content || "",
     response: document.response || ""
   }));
-  normalized.privacy.retentionDays = Number(normalized.privacy.retentionDays || 90);
+  normalized.privacy.retentionDays = Number(normalized.privacy.retentionDays || 30);
 
   return normalized;
 }
@@ -349,17 +440,115 @@ async function ensureTenantExists(tenantId) {
 
 function normalizeTenant(tenant) {
   const now = new Date().toISOString();
+  const id = normalizeTenantId(tenant.id);
   return {
-    id: normalizeTenantId(tenant.id),
+    id,
     name: tenant.name || tenant.id || "Klijent",
     ownerEmail: tenant.ownerEmail || "",
     status: tenant.status || "active",
     plan: tenant.plan || "client",
+    color: tenant.color || colorForTenant(id),
+    niche: tenant.niche || "",
+    signupNote: tenant.signupNote || tenant.signup_note || "",
     portalEnabled: tenant.portalEnabled !== false,
     portalPasswordHash: tenant.portalPasswordHash || "",
+    requestedAt: tenant.requestedAt || tenant.requested_at || null,
+    approvedAt: tenant.approvedAt || tenant.approved_at || null,
     createdAt: tenant.createdAt || now,
     updatedAt: tenant.updatedAt || now
   };
+}
+
+function tenantDefaultConfig(defaults, tenant) {
+  const id = normalizeTenantId(tenant.id);
+  return normalizeConfig({
+    ...defaults,
+    business: {
+      ...defaults.business,
+      name: tenant?.name || id,
+      shortDescription: tenant?.niche || defaults.business?.shortDescription || ""
+    },
+    privacy: {
+      ...(defaults.privacy || {}),
+      retentionDays: 30
+    },
+    ai: {
+      ...defaults.ai,
+      apiKeyEnv: `OPENAI_API_KEY_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`
+    }
+  });
+}
+
+async function upsertTenant(sql, tenant) {
+  await sql`
+    INSERT INTO tenants (
+      id, name, owner_email, status, plan, portal_enabled, portal_password_hash,
+      color, niche, signup_note, requested_at, approved_at, created_at, updated_at
+    )
+    VALUES (
+      ${tenant.id}, ${tenant.name}, ${tenant.ownerEmail}, ${tenant.status}, ${tenant.plan},
+      ${tenant.portalEnabled}, ${tenant.portalPasswordHash}, ${tenant.color}, ${tenant.niche},
+      ${tenant.signupNote}, ${tenant.requestedAt}, ${tenant.approvedAt}, ${tenant.createdAt}, ${tenant.updatedAt}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      owner_email = EXCLUDED.owner_email,
+      status = EXCLUDED.status,
+      plan = EXCLUDED.plan,
+      portal_enabled = EXCLUDED.portal_enabled,
+      portal_password_hash = EXCLUDED.portal_password_hash,
+      color = EXCLUDED.color,
+      niche = EXCLUDED.niche,
+      signup_note = EXCLUDED.signup_note,
+      requested_at = EXCLUDED.requested_at,
+      approved_at = EXCLUDED.approved_at,
+      updated_at = now()
+  `;
+}
+
+function dbTenantToTenant(row) {
+  return normalizeTenant({
+    id: row.id,
+    name: row.name,
+    ownerEmail: row.owner_email,
+    status: row.status,
+    plan: row.plan,
+    portalEnabled: row.portal_enabled,
+    portalPasswordHash: row.portal_password_hash,
+    color: row.color,
+    niche: row.niche,
+    signupNote: row.signup_note,
+    requestedAt: row.requested_at,
+    approvedAt: row.approved_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
+
+function colorForTenant(value) {
+  const palette = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316"];
+  const text = String(value || "");
+  let hash = 0;
+  for (const char of text) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return palette[hash % palette.length];
+}
+
+function defaultTenant() {
+  const now = new Date().toISOString();
+  return normalizeTenant({
+    id: DEFAULT_TENANT_ID,
+    name: "Moj servis",
+    ownerEmail: "",
+    status: "active",
+    plan: "owner",
+    color: "#10b981",
+    niche: "master",
+    portalEnabled: true,
+    portalPasswordHash: hashPortalPassword(process.env.ADMIN_TOKEN || "change-this-admin-token"),
+    approvedAt: now,
+    createdAt: now,
+    updatedAt: now
+  });
 }
 
 function uniqueTenantId(value, tenants) {

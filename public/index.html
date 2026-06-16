@@ -3,64 +3,93 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Meta Bot Console</title>
+    <title>Meta Bot Platform</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Meta Bot</p>
-        <h1>Kontrolni panel</h1>
-      </div>
-      <div class="top-actions">
-        <label class="tenant-switcher">
-          <span>Klijent</span>
-          <select id="tenantSelect"></select>
-        </label>
-        <span id="saveStatus" class="status-dot">Nesacuvano</span>
-        <button id="saveButton" class="primary">Sacuvaj</button>
-      </div>
-    </header>
-
-    <main class="layout">
-      <nav class="tabs" aria-label="Sekcije">
-        <button data-tab="dashboard" class="active">Dashboard</button>
-        <button data-tab="business">Osnovno</button>
-        <button data-tab="tenants">Klijenti</button>
-        <button data-tab="channels">Kanali</button>
-        <button data-tab="automation">Automatizacija</button>
-        <button data-tab="knowledge">Znanje</button>
-        <button data-tab="ai">AI</button>
-        <button data-tab="handoff">Handoff</button>
-        <button data-tab="privacy">Privatnost</button>
-        <button data-tab="test">Test</button>
+    <main class="landing-shell">
+      <nav class="landing-nav">
+        <div>
+          <p class="eyebrow">Meta Bot</p>
+          <strong>Centralizovan AI agent za Instagram i Facebook</strong>
+        </div>
+        <div class="landing-actions">
+          <a class="button-link" href="/client.html">Klijent login</a>
+          <a class="button-link primary" href="/admin.html">Admin login</a>
+        </div>
       </nav>
 
-      <section class="workspace">
-        <section id="tab-dashboard" class="tab-panel active"></section>
-        <section id="tab-business" class="tab-panel"></section>
-        <section id="tab-tenants" class="tab-panel"></section>
-        <section id="tab-channels" class="tab-panel"></section>
-        <section id="tab-automation" class="tab-panel"></section>
-        <section id="tab-knowledge" class="tab-panel"></section>
-        <section id="tab-ai" class="tab-panel"></section>
-        <section id="tab-handoff" class="tab-panel"></section>
-        <section id="tab-privacy" class="tab-panel"></section>
-        <section id="tab-test" class="tab-panel"></section>
+      <section class="landing-hero">
+        <div>
+          <p class="eyebrow">Prodaja, podrska i narudzbine</p>
+          <h1>Bot koji zna shop, proizvode, slike, reklamacije i narudzbine.</h1>
+          <p>
+            Svaki klijent ima odvojenog bota, svoju bazu znanja, svoje kanale i svoj Google Sheet.
+            Master admin prati sve, odobrava klijente i podesava API kljuceve centralno.
+          </p>
+          <div class="landing-actions">
+            <a class="button-link primary" href="#signup">Prijavi svoj shop</a>
+            <a class="button-link" href="/client.html">Vec imam nalog</a>
+          </div>
+        </div>
+        <div class="landing-panel">
+          <span>Kako radi</span>
+          <ol>
+            <li>Bot cita pitanje, sliku i kontekst razgovora.</li>
+            <li>Proverava proizvode, cene, dostavu, rokove i pravila iz baze znanja.</li>
+            <li>Prikuplja podatke za narudzbinu i salje zapis u Google Sheet.</li>
+            <li>Reklamacije, zamene i nesigurna pitanja vodi na handoff.</li>
+          </ol>
+        </div>
       </section>
 
-      <aside class="side">
-        <section>
-          <h2>Status</h2>
-          <dl id="statusList"></dl>
-        </section>
-        <section>
-          <h2>Razgovori</h2>
-          <div id="conversationList" class="conversation-list"></div>
-        </section>
-      </aside>
+      <section class="landing-steps">
+        <article>
+          <span>01</span>
+          <h2>Odvojen bot za svaki biznis</h2>
+          <p>Svaki klijent ima svoj profil, boju, kanale, Google Sheet i znanje.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h2>Bez izmisljanja odgovora</h2>
+          <p>Agent koristi sajt, rucna pravila i FAQ. Ako nije siguran, prebacuje na handoff.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>Centralna kontrola</h2>
+          <p>Master admin odobrava klijente, podesava API i prati sve metrike.</p>
+        </article>
+      </section>
+
+      <section id="signup" class="landing-signup">
+        <div>
+          <p class="eyebrow">Signup</p>
+          <h2>Prijava za klijentski nalog</h2>
+          <p>Posalji zahtev. Admin ga pregleda, odobrava i tek onda dobijas pristup portalu.</p>
+        </div>
+        <form id="signupForm" class="signup-form">
+          <div class="field">
+            <label for="signupName">Naziv biznisa</label>
+            <input id="signupName" name="name" required placeholder="Moj shop" />
+          </div>
+          <div class="field">
+            <label for="signupEmail">Email</label>
+            <input id="signupEmail" name="ownerEmail" type="email" required placeholder="email@example.com" />
+          </div>
+          <div class="field">
+            <label for="signupNiche">Niche / sta prodajete</label>
+            <input id="signupNiche" name="niche" required placeholder="Nakit, odeca, custom pokloni..." />
+          </div>
+          <div class="field">
+            <label for="signupNote">Napomena</label>
+            <textarea id="signupNote" name="signupNote" placeholder="Link sajta, Instagram profil, sta bot treba da pokriva..."></textarea>
+          </div>
+          <button class="primary">Posalji zahtev</button>
+          <p id="signupStatus" class="form-note"></p>
+        </form>
+      </section>
     </main>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/landing.js" type="module"></script>
   </body>
 </html>

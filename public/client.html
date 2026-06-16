@@ -22,20 +22,18 @@
     <main class="layout client-layout">
       <nav class="tabs" aria-label="Sekcije">
         <button data-tab="login" class="active">Login</button>
+        <button data-tab="dashboard">Dashboard</button>
         <button data-tab="business">Niche</button>
         <button data-tab="channels">Profili</button>
         <button data-tab="knowledge">Odgovori</button>
-        <button data-tab="ai">AI</button>
-        <button data-tab="test">Test</button>
       </nav>
 
       <section class="workspace">
         <section id="tab-login" class="tab-panel active"></section>
+        <section id="tab-dashboard" class="tab-panel"></section>
         <section id="tab-business" class="tab-panel"></section>
         <section id="tab-channels" class="tab-panel"></section>
         <section id="tab-knowledge" class="tab-panel"></section>
-        <section id="tab-ai" class="tab-panel"></section>
-        <section id="tab-test" class="tab-panel"></section>
       </section>
 
       <aside class="side">
@@ -44,7 +42,7 @@
           <dl id="statusList"></dl>
         </section>
         <section>
-          <h2>Razgovori</h2>
+          <h2>Aktivnosti</h2>
           <div id="conversationList" class="conversation-list"></div>
         </section>
       </aside>

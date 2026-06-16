@@ -6,14 +6,17 @@ import { loadDotEnv } from "./env.js";
 import {
   DEFAULT_TENANT_ID,
   createTenant,
+  approveTenantSignup,
   loadConfig,
   loadTenantConfig,
   loadTenants,
   normalizeTenantId,
+  rejectTenantSignup,
   requireTenantPortalToken,
   resetTenantPortalPassword,
   saveConfig,
   saveTenantConfig,
+  submitTenantSignup,
   verifyTenantPortalAccess
 } from "./config-store.js";
 import { routeIncomingMessage, appendConversationMessages } from "./bot-engine.js";
@@ -318,6 +321,15 @@ async function handleApi(request, response, url) {
     return sendJson(response, 201, { ...publicTenant(tenant), portalPassword: access.password });
   }
 
+  const approvalRoute = url.pathname.match(/^\/api\/tenants\/([^/]+)\/(approve|reject)$/);
+  if (approvalRoute && request.method === "POST") {
+    const tenantId = normalizeTenantId(approvalRoute[1]);
+    if (approvalRoute[2] === "approve") {
+      return sendJson(response, 200, await approveTenantSignup(tenantId));
+    }
+    return sendJson(response, 200, publicTenant(await rejectTenantSignup(tenantId)));
+  }
+
   const tenantRoute = matchTenantApiRoute(url.pathname);
   if (tenantRoute) {
     return await handleTenantApi(request, response, url, tenantRoute);
@@ -369,6 +381,15 @@ async function handleApi(request, response, url) {
 }
 
 async function handleClientApi(request, response, url) {
+  if (request.method === "POST" && url.pathname === "/client-api/signup") {
+    const body = await readJsonBody(request);
+    const signup = await submitTenantSignup(body);
+    return sendJson(response, 201, {
+      tenant: publicTenant(signup),
+      status: "pending"
+    });
+  }
+
   if (request.method === "POST" && url.pathname === "/client-api/login") {
     const body = await readJsonBody(request);
     const tenant = await verifyTenantPortalAccess(body.tenantId, body.password);
@@ -836,7 +857,12 @@ function matchTenantApiRoute(pathname) {
 }
 
 function isPublicAsset(pathname) {
-  return pathname === "/client.html" || pathname === "/client-app.js" || pathname === "/styles.css";
+  return pathname === "/" ||
+    pathname === "/index.html" ||
+    pathname === "/landing.js" ||
+    pathname === "/client.html" ||
+    pathname === "/client-app.js" ||
+    pathname === "/styles.css";
 }
 
 function publicTenant(tenant) {
@@ -846,7 +872,12 @@ function publicTenant(tenant) {
     ownerEmail: tenant.ownerEmail,
     status: tenant.status,
     plan: tenant.plan,
+    color: tenant.color || "#10b981",
+    niche: tenant.niche || "",
+    signupNote: tenant.signupNote || "",
     portalEnabled: tenant.portalEnabled !== false,
+    requestedAt: tenant.requestedAt,
+    approvedAt: tenant.approvedAt,
     createdAt: tenant.createdAt,
     updatedAt: tenant.updatedAt
   };
@@ -865,7 +896,7 @@ function mergeClientEditableConfig(current, incoming) {
       privacyNoticeUrl: incoming.business?.privacyNoticeUrl ?? current.business.privacyNoticeUrl,
       dataDeletionUrl: incoming.business?.dataDeletionUrl ?? current.business.dataDeletionUrl
     },
-    channels: incoming.channels || current.channels,
+    channels: current.channels,
     automation: {
       ...current.automation,
       enabled: incoming.automation?.enabled ?? current.automation.enabled,
@@ -885,25 +916,14 @@ function mergeClientEditableConfig(current, incoming) {
       refreshEveryHours: incoming.catalog?.refreshEveryHours ?? current.catalog?.refreshEveryHours ?? 24,
       maxPages: incoming.catalog?.maxPages ?? current.catalog?.maxPages ?? 8
     },
-    orders: incoming.orders || current.orders,
-    usage: incoming.usage || current.usage,
+    orders: current.orders,
+    usage: current.usage,
     integrations: {
       ...current.integrations,
       googleSheets: incoming.integrations?.googleSheets || current.integrations?.googleSheets
     },
-    ai: {
-      ...current.ai,
-      enabled: incoming.ai?.enabled ?? current.ai.enabled,
-      provider: incoming.ai?.provider ?? current.ai.provider,
-      model: incoming.ai?.model ?? current.ai.model,
-      apiKeyEnv: incoming.ai?.apiKeyEnv ?? current.ai.apiKeyEnv,
-      maxOutputTokens: incoming.ai?.maxOutputTokens ?? current.ai.maxOutputTokens,
-      temperature: incoming.ai?.temperature ?? current.ai.temperature,
-      modelRouting: incoming.ai?.modelRouting || current.ai.modelRouting,
-      systemPrompt: incoming.ai?.systemPrompt ?? current.ai.systemPrompt,
-      fallbackToHumanOnError: incoming.ai?.fallbackToHumanOnError ?? current.ai.fallbackToHumanOnError
-    },
-    handoff: incoming.handoff || current.handoff,
+    ai: current.ai,
+    handoff: current.handoff,
     privacy: {
       ...current.privacy,
       retentionDays: incoming.privacy?.retentionDays ?? current.privacy.retentionDays,

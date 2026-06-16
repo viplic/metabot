@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { getSql, hasDatabase, json } from "./db.js";
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "data");
 const CONVERSATIONS_PATH = path.join(DATA_DIR, "conversations.json");
@@ -9,6 +10,18 @@ const TENANT_DATA_DIR = path.join(DATA_DIR, "tenants");
 const DEFAULT_TENANT_ID = "default";
 
 export async function loadConversations(tenantId = DEFAULT_TENANT_ID) {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const rows = await sql`
+      SELECT *
+      FROM conversations
+      WHERE tenant_id = ${normalizeTenantId(tenantId)}
+      ORDER BY COALESCE(last_user_at, last_bot_at, opened_at) DESC
+      LIMIT 500
+    `;
+    return rows.map(dbConversationToConversation);
+  }
+
   try {
     const raw = await fs.readFile(conversationsPath(tenantId), "utf8");
     const data = JSON.parse(raw);
@@ -20,6 +33,39 @@ export async function loadConversations(tenantId = DEFAULT_TENANT_ID) {
 }
 
 export async function saveConversations(conversations, tenantId = DEFAULT_TENANT_ID) {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    for (const conversation of conversations) {
+      await sql`
+        INSERT INTO conversations (
+          id, tenant_id, platform_user_id, channel_type, status, human_handoff,
+          profile, messages, audit, opened_at, last_user_at, last_bot_at
+        )
+        VALUES (
+          ${conversation.id}, ${normalizeTenantId(tenantId)}, ${conversation.platformUserId || ""},
+          ${conversation.channelType || ""}, ${conversation.status || "open"}, ${Boolean(conversation.humanHandoff)},
+          ${json(conversation.profile || {})}::jsonb,
+          ${json(conversation.messages || [])}::jsonb,
+          ${json(conversation.audit || [])}::jsonb,
+          ${conversation.openedAt || new Date().toISOString()},
+          ${conversation.lastUserAt || null},
+          ${conversation.lastBotAt || null}
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          platform_user_id = EXCLUDED.platform_user_id,
+          channel_type = EXCLUDED.channel_type,
+          status = EXCLUDED.status,
+          human_handoff = EXCLUDED.human_handoff,
+          profile = EXCLUDED.profile,
+          messages = EXCLUDED.messages,
+          audit = EXCLUDED.audit,
+          last_user_at = EXCLUDED.last_user_at,
+          last_bot_at = EXCLUDED.last_bot_at
+      `;
+    }
+    return;
+  }
+
   await fs.mkdir(path.dirname(conversationsPath(tenantId)), { recursive: true });
   const tempPath = `${conversationsPath(tenantId)}.tmp`;
   await fs.writeFile(tempPath, `${JSON.stringify(conversations, null, 2)}\n`, "utf8");
@@ -27,6 +73,20 @@ export async function saveConversations(conversations, tenantId = DEFAULT_TENANT
 }
 
 export async function appendRawEvent(event) {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    await sql`
+      INSERT INTO raw_events (tenant_id, platform_user_id, payload, received_at)
+      VALUES (
+        ${normalizeTenantId(event.tenantId || DEFAULT_TENANT_ID)},
+        ${event.platformUserId || ""},
+        ${json(event)}::jsonb,
+        ${event.receivedAt || new Date().toISOString()}
+      )
+    `;
+    return;
+  }
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.appendFile(RAW_EVENTS_PATH, `${JSON.stringify(event)}\n`, "utf8");
 }
@@ -37,6 +97,22 @@ export async function markEventIfNew(eventId, ttlHours = 48, tenantId = DEFAULT_
   const scopedEventId = `${normalizeTenantId(tenantId)}:${eventId}`;
   const now = Date.now();
   const cutoff = now - Math.max(1, Number(ttlHours || 48)) * 60 * 60 * 1000;
+
+  if (hasDatabase()) {
+    const sql = await getSql();
+    await sql`DELETE FROM processed_events WHERE processed_at < ${new Date(cutoff).toISOString()}`;
+    try {
+      await sql`
+        INSERT INTO processed_events (id, tenant_id, processed_at)
+        VALUES (${scopedEventId}, ${normalizeTenantId(tenantId)}, ${new Date(now).toISOString()})
+      `;
+      return true;
+    } catch (error) {
+      if (String(error.message || "").includes("duplicate") || error.code === "23505") return false;
+      throw error;
+    }
+  }
+
   const processed = await loadProcessedEvents();
 
   for (const [id, timestamp] of Object.entries(processed)) {
@@ -120,6 +196,12 @@ export async function pruneRawEvents(retentionDays) {
   if (!retentionDays || retentionDays <= 0) return 0;
 
   const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const result = await sql`DELETE FROM raw_events WHERE received_at < ${new Date(cutoff).toISOString()} RETURNING id`;
+    await sql`DELETE FROM conversations WHERE opened_at < ${new Date(cutoff).toISOString()}`;
+    return result.length;
+  }
   return rewriteRawEvents((event) => {
     const receivedAt = Date.parse(event.receivedAt || 0);
     return Number.isNaN(receivedAt) || receivedAt >= cutoff;
@@ -128,6 +210,11 @@ export async function pruneRawEvents(retentionDays) {
 
 export async function deleteCustomerRawEvents(platformUserId) {
   if (!platformUserId) return 0;
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const result = await sql`DELETE FROM raw_events WHERE platform_user_id = ${platformUserId} RETURNING id`;
+    return result.length;
+  }
   return rewriteRawEvents((event, line) => !line.includes(platformUserId));
 }
 
@@ -203,4 +290,20 @@ function normalizeTenantId(value) {
     .trim()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-|-$/g, "") || DEFAULT_TENANT_ID;
+}
+
+function dbConversationToConversation(row) {
+  return {
+    id: row.id,
+    platformUserId: row.platform_user_id,
+    channelType: row.channel_type,
+    status: row.status,
+    humanHandoff: row.human_handoff,
+    profile: row.profile || {},
+    messages: row.messages || [],
+    audit: row.audit || [],
+    openedAt: row.opened_at,
+    lastUserAt: row.last_user_at,
+    lastBotAt: row.last_bot_at
+  };
 }
