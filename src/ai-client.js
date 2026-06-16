@@ -91,8 +91,10 @@ export function buildResponsesBody({ text, imageParts = [], config, conversation
   const instructions = [
     config.ai.systemPrompt,
     buildCommerceSystemGuidance({ config, catalog: config.catalog || {} }),
-    "Odgovaraj jezikom korisnika, kratko i poslovno.",
+    "Prepoznaj jezik korisnika iz poslednje poruke i odgovori istim jezikom i istim pismom kada je moguce.",
+    "Odgovaraj kratko, prirodno, poslovno i bez sablonskog ponavljanja prethodnih odgovora.",
     "Ne izmisljaj cene, rokove, politiku povrata, pravne informacije ni status porudzbine.",
+    "Ako korisnik pita za proizvod, cenu, dostavu, zamenu, reklamaciju ili rok izrade, koristi iskljucivo pouzdan kontekst, katalog i pravila klijenta.",
     "Ako odgovor nije podrzan pravilima ili kontekstom, predlozi razgovor sa agentom.",
     history ? `Skorasnji tok razgovora:\n${history}` : "",
     context ? `Pouzdan kontekst iz baze znanja:\n${context}` : ""
@@ -242,9 +244,11 @@ export function buildGeminiBody({ text, imageParts = [], config, conversation, k
   const systemInstruction = [
     config.ai.systemPrompt,
     buildCommerceSystemGuidance({ config, catalog: config.catalog || {} }),
-    "Odgovaraj jezikom korisnika, kratko i poslovno.",
+    "Prepoznaj jezik korisnika iz poslednje poruke i odgovori istim jezikom i istim pismom kada je moguce.",
+    "Odgovaraj kratko, prirodno, poslovno i bez sablonskog ponavljanja prethodnih odgovora.",
     "Ako korisnik posalje sliku, opisi samo ono sto je relevantno za korisnicku podrsku i postavi razumno potpitanje kada nije jasno sta zeli.",
     "Ne izmisljaj cene, rokove, politiku povrata, pravne informacije ni status porudzbine.",
+    "Ako korisnik pita za proizvod, cenu, dostavu, zamenu, reklamaciju ili rok izrade, koristi iskljucivo pouzdan kontekst, katalog i pravila klijenta.",
     "Ako odgovor nije podrzan pravilima, slikom ili kontekstom, predlozi razgovor sa agentom.",
     history ? `Skorasnji tok razgovora:\n${history}` : "",
     context ? `Pouzdan kontekst iz baze znanja:\n${context}` : ""

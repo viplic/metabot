@@ -7,7 +7,9 @@ export function normalizeMetaPayload(payload) {
 
   for (const entry of entries) {
     for (const event of entry.messaging || []) {
-      const text = event.message?.text || event.postback?.payload || event.postback?.title || "";
+      if (shouldIgnoreMessagingEvent(event)) continue;
+
+      const text = normalizeMessagingText(event);
       const attachments = normalizeMessageAttachments(event.message?.attachments);
       if (!event.sender?.id || (!text && !attachments.length)) continue;
       events.push({
@@ -24,6 +26,7 @@ export function normalizeMetaPayload(payload) {
 
     for (const change of entry.changes || []) {
       const value = change.value || {};
+      if (shouldIgnoreChangeEvent(value)) continue;
       const text = value.message || value.text || value.comment || "";
       const attachments = normalizeChangeAttachments(value);
       const senderId = value.sender_id || value.from?.id;
@@ -42,6 +45,34 @@ export function normalizeMetaPayload(payload) {
   }
 
   return events;
+}
+
+function shouldIgnoreMessagingEvent(event) {
+  return Boolean(
+    event.delivery ||
+    event.read ||
+    event.account_linking ||
+    event.message?.is_echo ||
+    event.message?.is_deleted ||
+    event.message?.is_unsupported ||
+    event.standby
+  );
+}
+
+function shouldIgnoreChangeEvent(value) {
+  return Boolean(value.is_echo || value.is_deleted || value.read || value.delivery);
+}
+
+function normalizeMessagingText(event) {
+  return (
+    event.message?.text ||
+    event.message?.quick_reply?.payload ||
+    event.message?.quick_reply?.title ||
+    event.postback?.payload ||
+    event.postback?.title ||
+    event.optin?.ref ||
+    ""
+  );
 }
 
 function normalizeMessageAttachments(attachments = []) {

@@ -177,7 +177,7 @@
     }
   },
   "privacy": {
-    "retentionDays": 90,
+    "retentionDays": 30,
     "redactLogs": true,
     "storeRawEvents": false
   }

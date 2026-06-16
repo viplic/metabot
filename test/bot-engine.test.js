@@ -467,6 +467,58 @@ test("normalizes Meta image attachments into incoming events", async () => {
   ]);
 });
 
+test("normalizes Meta quick replies and ignores non-user messaging events", async () => {
+  const { normalizeMetaPayload } = await import("../src/meta-client.js");
+  const events = normalizeMetaPayload({
+    object: "page",
+    entry: [
+      {
+        id: "page-1",
+        messaging: [
+          {
+            sender: { id: "user-1" },
+            recipient: { id: "page-1" },
+            timestamp: 123,
+            message: {
+              mid: "mid-quick",
+              quick_reply: {
+                title: "Porudzbina",
+                payload: "ORDER_START"
+              }
+            }
+          },
+          {
+            sender: { id: "page-1" },
+            recipient: { id: "user-1" },
+            timestamp: 124,
+            message: {
+              mid: "mid-echo",
+              is_echo: true,
+              text: "Echo should be ignored"
+            }
+          },
+          {
+            sender: { id: "user-1" },
+            recipient: { id: "page-1" },
+            timestamp: 125,
+            read: { watermark: 125 }
+          },
+          {
+            sender: { id: "user-1" },
+            recipient: { id: "page-1" },
+            timestamp: 126,
+            delivery: { mids: ["mid-quick"] }
+          }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].id, "mid-quick");
+  assert.equal(events[0].text, "ORDER_START");
+});
+
 test("commerce analyzer detects incomplete orders and missing fields", () => {
   const result = analyzeCommerceMessage({
     text: "Hocu da porucim crvenu majicu, telefon 064 123 4567",
