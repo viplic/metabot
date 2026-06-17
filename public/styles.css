@@ -1094,7 +1094,7 @@ textarea {
 
 dl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(76px, 108px);
   gap: 10px 16px;
   margin: 0;
   font-size: 14px;
@@ -1108,6 +1108,10 @@ dd {
   margin: 0;
   font-weight: 600;
   color: #ffffff;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .conversation-list {
