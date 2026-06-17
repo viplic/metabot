@@ -1300,20 +1300,47 @@ dd {
 
   .landing-shell {
     width: min(100% - 24px, 1180px);
-    padding: 16px 0 36px;
+    padding: 14px 0 36px;
+  }
+
+  .landing-nav {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0 14px;
+  }
+
+  .landing-nav .eyebrow {
+    margin-bottom: 4px;
+  }
+
+  .landing-nav strong {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .landing-nav .landing-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .landing-nav .button-link {
+    min-height: 42px;
+    padding: 0 12px;
   }
 
   .landing-hero {
     min-height: calc(100svh - 178px);
     margin: 0 -12px;
-    padding: 42px 12px 54px;
+    padding: 28px 12px 54px;
     gap: 22px;
   }
 
   .landing-hero::before {
     content: "";
     position: absolute;
-    inset: -22px -12px 0;
+    inset: 0 -12px 0;
     z-index: -1;
     border-radius: 0 0 22px 22px;
     background:
@@ -1453,6 +1480,10 @@ dd {
   .landing-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .landing-nav .landing-actions {
+    flex-direction: row;
   }
 
   .landing-actions .button-link,
