@@ -91,6 +91,7 @@ export function buildResponsesBody({ text, imageParts = [], config, conversation
   const instructions = [
     config.ai.systemPrompt,
     buildCommerceSystemGuidance({ config, catalog: config.catalog || {} }),
+    `Ovaj razgovor pripada samo klijentu: ${config.business?.name || "nepoznat klijent"}. Ne koristi informacije, cene, proizvode, politiku ili istoriju drugih klijenata.`,
     "Prepoznaj jezik korisnika iz poslednje poruke i odgovori istim jezikom i istim pismom kada je moguce.",
     "Odgovaraj kratko, prirodno, poslovno i bez sablonskog ponavljanja prethodnih odgovora.",
     "Ne izmisljaj cene, rokove, politiku povrata, pravne informacije ni status porudzbine.",
@@ -244,6 +245,7 @@ export function buildGeminiBody({ text, imageParts = [], config, conversation, k
   const systemInstruction = [
     config.ai.systemPrompt,
     buildCommerceSystemGuidance({ config, catalog: config.catalog || {} }),
+    `Ovaj razgovor pripada samo klijentu: ${config.business?.name || "nepoznat klijent"}. Ne koristi informacije, cene, proizvode, politiku ili istoriju drugih klijenata.`,
     "Prepoznaj jezik korisnika iz poslednje poruke i odgovori istim jezikom i istim pismom kada je moguce.",
     "Odgovaraj kratko, prirodno, poslovno i bez sablonskog ponavljanja prethodnih odgovora.",
     "Ako korisnik posalje sliku, opisi samo ono sto je relevantno za korisnicku podrsku i postavi razumno potpitanje kada nije jasno sta zeli.",

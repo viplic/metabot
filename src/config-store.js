@@ -341,21 +341,22 @@ export function normalizeConfig(config) {
   normalized.automation.humanAgentWindowDays = Number(normalized.automation.humanAgentWindowDays || 7);
   normalized.automation.deduplicationWindowHours = Number(normalized.automation.deduplicationWindowHours || 48);
   normalized.automation.confidenceThreshold = clampNumber(normalized.automation.confidenceThreshold ?? 0.72, 0, 1);
-  normalized.ai.maxInputChars = Number(normalized.ai.maxInputChars || 2000);
-  normalized.ai.maxOutputTokens = Number(normalized.ai.maxOutputTokens || 500);
-  normalized.ai.maxContextChars = Number(normalized.ai.maxContextChars || 4000);
-  normalized.ai.maxHistoryChars = Number(normalized.ai.maxHistoryChars || 1600);
-  normalized.ai.maxImages = Number(normalized.ai.maxImages || 3);
-  normalized.ai.maxImageBytes = Number(normalized.ai.maxImageBytes || 5 * 1024 * 1024);
-  normalized.ai.temperature = clampNumber(normalized.ai.temperature ?? 0.2, 0, 2);
+  normalized.ai.maxInputChars = clampNumber(normalized.ai.maxInputChars || 1800, 200, 1800);
+  normalized.ai.maxOutputTokens = clampNumber(normalized.ai.maxOutputTokens || 320, 120, 320);
+  normalized.ai.maxContextChars = clampNumber(normalized.ai.maxContextChars || 2600, 600, 2600);
+  normalized.ai.maxHistoryChars = clampNumber(normalized.ai.maxHistoryChars || 900, 0, 900);
+  normalized.ai.maxImages = clampNumber(normalized.ai.maxImages || 2, 0, 2);
+  normalized.ai.maxImageBytes = clampNumber(normalized.ai.maxImageBytes || 3 * 1024 * 1024, 128 * 1024, 3 * 1024 * 1024);
+  normalized.ai.temperature = clampNumber(normalized.ai.temperature ?? 0.15, 0, 0.15);
+  normalized.ai.systemPrompt = isolatedSystemPrompt(normalized.ai.systemPrompt);
   normalized.ai.modelRouting = {
     enabled: normalized.ai.modelRouting?.enabled !== false,
     simpleModel: normalized.ai.modelRouting?.simpleModel || "gpt-5.4-nano",
     standardModel: normalized.ai.modelRouting?.standardModel || "gpt-5.4-mini",
     complexModel: normalized.ai.modelRouting?.complexModel || "gpt-5.5",
     visionModel: normalized.ai.modelRouting?.visionModel || "gpt-5.5",
-    standardMinChars: Number(normalized.ai.modelRouting?.standardMinChars || 220),
-    complexMinChars: Number(normalized.ai.modelRouting?.complexMinChars || 900),
+    standardMinChars: Math.max(280, clampNumber(normalized.ai.modelRouting?.standardMinChars || 280, 80, 500)),
+    complexMinChars: Math.max(1200, clampNumber(normalized.ai.modelRouting?.complexMinChars || 1200, 500, 2000)),
     complexKeywords: ensureArray(normalized.ai.modelRouting?.complexKeywords).map(String).filter(Boolean)
   };
   normalized.catalog = {
@@ -434,6 +435,13 @@ function clampNumber(value, min, max) {
   const number = Number(value);
   if (Number.isNaN(number)) return min;
   return Math.min(max, Math.max(min, number));
+}
+
+function isolatedSystemPrompt(value) {
+  const prompt = String(value || "").trim();
+  const isolation = "Koristi samo podatke ovog klijenta, njegov katalog, pravila, FAQ, bazu znanja i ovaj razgovor. Nikad ne koristi informacije drugih klijenata ili drugih shopova.";
+  if (prompt.includes("Nikad ne koristi informacije drugih klijenata")) return prompt;
+  return [prompt, isolation].filter(Boolean).join(" ");
 }
 
 async function readTenantsFile() {

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig } from "../src/config-store.js";
+import { loadConfig, normalizeConfig } from "../src/config-store.js";
 import { routeIncomingMessage } from "../src/bot-engine.js";
-import { selectOpenAiModel } from "../src/ai-client.js";
+import { buildResponsesBody, selectOpenAiModel } from "../src/ai-client.js";
 import { parseEnvLine, loadDotEnv } from "../src/env.js";
 import { adminSessionValue, verifyAdminAuth, verifyMetaSignature } from "../src/security.js";
 import { markEventIfNew } from "../src/storage.js";
@@ -410,6 +410,87 @@ test("OpenAI fallback request uses routed model", async () => {
     globalThis.fetch = originalFetch;
     delete process.env.OPENAI_API_KEY;
   }
+});
+
+test("normalizes AI settings to smart low-spend defaults and caps", () => {
+  const config = normalizeConfig({
+    business: { defaultReply: "Default" },
+    meta: {},
+    channels: [],
+    automation: { rules: [], faqs: [], collectFields: [], handoffKeywords: [], riskyKeywords: [] },
+    knowledge: { documents: [] },
+    ai: {
+      enabled: true,
+      provider: "openai",
+      model: "gpt-5.5",
+      apiKeyEnv: "OPENAI_API_KEY",
+      maxInputChars: 9000,
+      maxOutputTokens: 900,
+      maxContextChars: 12000,
+      maxHistoryChars: 9000,
+      maxImages: 9,
+      maxImageBytes: 99 * 1024 * 1024,
+      temperature: 1.5,
+      modelRouting: {
+        enabled: true,
+        simpleModel: "gpt-5.4-nano",
+        standardModel: "gpt-5.4-mini",
+        complexModel: "gpt-5.5",
+        visionModel: "gpt-5.5",
+        standardMinChars: 1,
+        complexMinChars: 100
+      }
+    },
+    catalog: {},
+    orders: {},
+    usage: {},
+    integrations: {},
+    handoff: { ticketing: {} },
+    privacy: {}
+  });
+
+  assert.equal(config.ai.maxInputChars, 1800);
+  assert.equal(config.ai.maxOutputTokens, 320);
+  assert.equal(config.ai.maxContextChars, 2600);
+  assert.equal(config.ai.maxHistoryChars, 900);
+  assert.equal(config.ai.maxImages, 2);
+  assert.equal(config.ai.maxImageBytes, 3 * 1024 * 1024);
+  assert.equal(config.ai.temperature, 0.15);
+  assert.equal(config.ai.modelRouting.standardMinChars, 280);
+  assert.equal(config.ai.modelRouting.complexMinChars, 1200);
+  assert.match(config.ai.systemPrompt, /Nikad ne koristi informacije drugih klijenata/);
+});
+
+test("OpenAI prompt is isolated to the current tenant", () => {
+  const body = buildResponsesBody({
+    text: "Koliko kosta dostava?",
+    model: "gpt-5.5",
+    config: {
+      business: {
+        name: "Shop Alfa",
+        defaultReply: "Default"
+      },
+      ai: {
+        model: "gpt-5.5",
+        maxInputChars: 1800,
+        maxOutputTokens: 320,
+        maxContextChars: 2600,
+        maxHistoryChars: 900,
+        temperature: 0.15,
+        systemPrompt: "Sys prompt"
+      },
+      automation: {},
+      catalog: {},
+      orders: {}
+    },
+    conversation: { platformUserId: "user-1", messages: [] },
+    knowledgeMatches: []
+  });
+
+  assert.match(body.instructions, /samo klijentu: Shop Alfa/);
+  assert.match(body.instructions, /Ne koristi informacije, cene, proizvode, politiku ili istoriju drugih klijenata/);
+  assert.equal(body.max_output_tokens, 320);
+  assert.equal(body.store, false);
 });
 
 test("knowledge retrieval can answer before AI fallback", async () => {

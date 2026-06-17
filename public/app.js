@@ -890,8 +890,8 @@ function renderAi() {
     standardModel: "gpt-5.4-mini",
     complexModel: "gpt-5.5",
     visionModel: "gpt-5.5",
-    standardMinChars: 220,
-    complexMinChars: 900,
+    standardMinChars: 280,
+    complexMinChars: 1200,
     complexKeywords: []
   };
 
@@ -904,7 +904,7 @@ function renderAi() {
         if (value === "gemini" && config.ai.apiKeyEnv === "OPENAI_API_KEY") config.ai.apiKeyEnv = "GEMINI_API_KEY";
         if (value === "gemini" && config.ai.model.startsWith("gpt-")) config.ai.model = "gemini-2.5-flash";
         if (value === "openai" && config.ai.apiKeyEnv === "GEMINI_API_KEY") config.ai.apiKeyEnv = "OPENAI_API_KEY";
-        if (value === "openai" && config.ai.model.startsWith("gemini-")) config.ai.model = "gpt-4.1-mini";
+        if (value === "openai" && config.ai.model.startsWith("gemini-")) config.ai.model = "gpt-5.5";
       })}
       ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
       ${textField("API key env", config.ai.apiKeyEnv, (value) => (config.ai.apiKeyEnv = value))}
@@ -913,7 +913,7 @@ function renderAi() {
       ${numberField("Max kontekst", config.ai.maxContextChars, (value) => (config.ai.maxContextChars = Number(value)))}
       ${numberField("Max istorija", config.ai.maxHistoryChars, (value) => (config.ai.maxHistoryChars = Number(value)))}
       ${numberField("Max slika", config.ai.maxImages, (value) => (config.ai.maxImages = Number(value)))}
-      ${numberField("Temperatura", config.ai.temperature, (value) => (config.ai.temperature = Number(value)), 0, 2, 0.1)}
+      ${numberField("Temperatura", config.ai.temperature, (value) => (config.ai.temperature = Number(value)), 0, 0.35, 0.05)}
       ${checkboxField("Greska vodi na handoff", config.ai.fallbackToHumanOnError, (value) => (config.ai.fallbackToHumanOnError = value))}
       ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
     </div>`
@@ -1213,7 +1213,15 @@ function normalizeClientConfig(value) {
   normalized.ai ||= {};
   normalized.ai.model ||= "gpt-5.5";
   normalized.ai.apiKeyEnv ||= "OPENAI_API_KEY";
+  normalized.ai.maxInputChars ||= 1800;
+  normalized.ai.maxOutputTokens ||= 320;
+  normalized.ai.maxContextChars ||= 2600;
+  normalized.ai.maxHistoryChars ||= 900;
+  normalized.ai.maxImages ||= 2;
+  normalized.ai.temperature ??= 0.15;
   normalized.ai.modelRouting ||= {};
+  normalized.ai.modelRouting.standardMinChars ||= 280;
+  normalized.ai.modelRouting.complexMinChars ||= 1200;
   normalized.ai.modelRouting.complexKeywords ||= [];
   normalized.handoff ||= {};
   normalized.handoff.ticketing ||= {};
