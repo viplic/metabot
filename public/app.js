@@ -163,20 +163,27 @@ function renderDashboard() {
     )}
 
     ${section(
-      "Kako se uci automatizacija",
-      `<div class="learning-grid">
-        <article>
-          <h3>1. Ubaci URL shopa</h3>
-          <p>U profilu klijenta upisi URL sajta i pokreni sync. Automatizacija izvlaci proizvode, cene, politiku dostave, rokove izrade i FAQ tekstove u bazu znanja.</p>
-        </article>
-        <article>
-          <h3>2. Dodaj tacna pravila</h3>
-          <p>U sekciji Znanje unesi pravila za cenu dostave, zamene, reklamacije, rokove slanja i frazu za porucivanje. Sve sto nije 100% poznato vodi se na handoff.</p>
-        </article>
-        <article>
-          <h3>3. Testiraj pre pustanja</h3>
-          <p>U Test sekciji probaj pitanja za cenu, sliku proizvoda, kasnjenje posiljke, zamenu i narudzbinu. Kad odgovori zvuce prirodno, ukljuci slanje za Meta kanal.</p>
-        </article>
+      "Aktivnost AI Agenta (Simulacija uživo)",
+      `<div class="chat-preview-shell">
+        <div class="chat-preview-header">
+          <div class="chat-preview-user">
+            <span class="chat-preview-avatar"></span>
+            <div>
+              <h4>Kupac (Simulacija)</h4>
+              <small>Zainteresovan za proizvode</small>
+            </div>
+          </div>
+          <span class="chat-live-badge"><span class="status-pulse"></span>Live</span>
+        </div>
+        <div class="chat-preview-body">
+          <div class="chat-msg user-msg">Eja, da li imate na stanju srebrnu ogrlicu i kolika je cena dostave?</div>
+          <div class="chat-msg bot-msg typing">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+          <div class="chat-msg bot-msg reply-msg">Zdravo! Imamo srebrnu ogrlicu na stanju po ceni od 2.400 RSD. Dostava je besplatna za sve porudžbine preko 4.000 RSD, inače je 350 RSD. Želite li da vam pošaljem link za naručivanje?</div>
+        </div>
       </div>`
     )}
   `;
