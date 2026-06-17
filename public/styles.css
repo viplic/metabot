@@ -3,7 +3,7 @@
 :root {
   --bg: #070a13;
   --bg-gradient: radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.10) 0%, rgba(7, 10, 19, 0.96) 58%);
-  --panel: rgba(15, 22, 42, 0.65);
+  --panel: rgba(15, 22, 42, 0.54);
   --panel-solid: #0f162a;
   --line: rgba(255, 255, 255, 0.08);
   --line-focus: rgba(16, 185, 129, 0.4);
@@ -37,11 +37,11 @@ body {
   color: var(--text);
   background: var(--bg);
   background-image:
-    linear-gradient(rgba(7, 10, 19, 0.88), rgba(7, 10, 19, 0.94)),
+    linear-gradient(135deg, rgba(7, 10, 19, 0.64), rgba(7, 10, 19, 0.84)),
     url("/assets/nibachat-bg.png"),
     var(--bg-gradient);
   background-size: cover, cover, auto;
-  background-position: center, center, center;
+  background-position: center bottom, center bottom, center;
   background-attachment: fixed;
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
@@ -202,7 +202,7 @@ a.button-link.primary {
   padding: 24px;
   border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: 12px;
-  background: rgba(15, 22, 42, 0.68);
+  background: rgba(15, 22, 42, 0.58);
   box-shadow: var(--shadow);
 }
 
@@ -267,7 +267,7 @@ a.button-link.primary {
   padding: 28px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15, 22, 42, 0.62);
+  background: rgba(15, 22, 42, 0.54);
 }
 
 .signup-form,
@@ -297,7 +297,7 @@ a.button-link.primary {
   border-radius: 8px;
   background:
     linear-gradient(135deg, rgba(16, 185, 129, 0.10), rgba(59, 130, 246, 0.06)),
-    rgba(15, 22, 42, 0.72);
+    rgba(15, 22, 42, 0.62);
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
 }
@@ -340,7 +340,7 @@ button.danger:hover {
   justify-content: space-between;
   gap: 24px;
   padding: 24px 32px;
-  background: rgba(15, 22, 42, 0.45);
+  background: rgba(15, 22, 42, 0.38);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -536,7 +536,7 @@ body[data-active-tab="tenants"] .side {
   border-radius: 12px;
   background:
     linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(59, 130, 246, 0.08)),
-    rgba(15, 22, 42, 0.72);
+    rgba(15, 22, 42, 0.60);
   box-shadow: var(--shadow);
 }
 
@@ -550,7 +550,7 @@ body[data-active-tab="tenants"] .side {
   border-radius: 12px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--client-color, var(--accent)) 18%, transparent), rgba(59, 130, 246, 0.07)),
-    rgba(15, 22, 42, 0.72);
+    rgba(15, 22, 42, 0.60);
   box-shadow: var(--shadow);
 }
 
@@ -715,7 +715,7 @@ body[data-active-tab="tenants"] .side {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15, 22, 42, 0.62);
+  background: rgba(15, 22, 42, 0.54);
   box-shadow: var(--shadow);
 }
 
@@ -738,7 +738,7 @@ body[data-active-tab="tenants"] .side {
   border-radius: 8px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--client-color, var(--accent)) 13%, transparent), rgba(255, 255, 255, 0.02)),
-    rgba(15, 22, 42, 0.70);
+    rgba(15, 22, 42, 0.58);
   box-shadow: var(--shadow);
 }
 
@@ -769,7 +769,7 @@ body[data-active-tab="tenants"] .side {
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .client-row-main {
@@ -841,12 +841,23 @@ body[data-active-tab="tenants"] .side {
   margin: 0;
 }
 
+.actions.clients-toolbar {
+  align-items: center;
+  margin: 22px 0 30px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.actions.clients-toolbar + h3 {
+  margin-top: 0;
+}
+
 .wizard-panel {
   margin-top: 18px;
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.14);
+  background: rgba(7, 10, 19, 0.36);
 }
 
 .wizard-panel .wizard-grid {
@@ -946,7 +957,7 @@ body[data-active-tab="tenants"] .side {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 24px;
+  padding: 26px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1073,7 +1084,7 @@ textarea {
 }
 
 .side section {
-  background: rgba(15, 22, 42, 0.45);
+  background: rgba(15, 22, 42, 0.42);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px;
@@ -1210,6 +1221,16 @@ dd {
 }
 
 @media (max-width: 768px) {
+  body {
+    background-image:
+      linear-gradient(180deg, rgba(7, 10, 19, 0.58), rgba(7, 10, 19, 0.88)),
+      url("/assets/nibachat-bg.png"),
+      var(--bg-gradient);
+    background-position: center top, center top, center;
+    background-size: auto 100vh, auto 100vh, auto;
+    background-repeat: no-repeat, no-repeat, no-repeat;
+  }
+
   body.landing-page {
     background-image:
       linear-gradient(180deg, rgba(7, 10, 19, 0.42), rgba(7, 10, 19, 0.82)),

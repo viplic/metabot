@@ -26,6 +26,10 @@ document.querySelectorAll(".tabs button").forEach((button) => {
 });
 
 document.querySelector("#saveButton").addEventListener("click", save);
+document.querySelector("#logoutButton").addEventListener("click", async () => {
+  await fetch("/auth/logout", { method: "POST" }).catch(() => {});
+  window.location.href = "/login.html";
+});
 document.querySelector("#tenantSelect").addEventListener("change", async (event) => {
   if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) {
     event.currentTarget.value = currentTenantId;
@@ -321,7 +325,7 @@ function renderTenants() {
       <article><span>3</span><strong>Izmena</strong><small>Detaljna podesavanja se otvaraju samo kroz Izmeni.</small></article>
       <article><span>4</span><strong>Pokretanje</strong><small>Ukljucis kanale, API, znanje i pratis metrike.</small></article>
     </div>
-    <div class="actions"><button id="showAddTenant" class="primary">Dodaj novog klijenta</button></div>
+    <div class="actions clients-toolbar"><button id="showAddTenant" class="primary">Dodaj novog klijenta</button></div>
     <div id="addTenantPanel" class="wizard-panel" hidden>
       <form id="addTenantForm" class="wizard-grid">
         <section>

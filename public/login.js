@@ -10,7 +10,7 @@ form.addEventListener("submit", async (event) => {
   const password = String(data.get("password") || "");
 
   if (!username || !password) {
-    status.textContent = "Unesite username i password.";
+    status.textContent = "Unesite email/username i sifru.";
     return;
   }
 
