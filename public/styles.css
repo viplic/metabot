@@ -47,6 +47,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(7, 10, 19, 0.58), rgba(7, 10, 19, 0.82)),
+    url("/assets/nibachat-bg.png") center bottom / cover no-repeat;
+}
+
 body.landing-page {
   background-image:
     linear-gradient(90deg, rgba(7, 10, 19, 0.48), rgba(7, 10, 19, 0.78)),
@@ -1227,27 +1238,65 @@ dd {
 @media (max-width: 768px) {
   body {
     background-image:
-      linear-gradient(180deg, rgba(7, 10, 19, 0.58), rgba(7, 10, 19, 0.88)),
+      linear-gradient(180deg, rgba(7, 10, 19, 0.48), rgba(7, 10, 19, 0.82)),
       url("/assets/nibachat-bg.png"),
       var(--bg-gradient);
     background-position: center top, center top, center;
-    background-size: auto 100vh, auto 100vh, auto;
-    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-size: cover, cover, auto;
+    background-repeat: repeat-y, repeat-y, no-repeat;
+  }
+
+  body::before {
+    background:
+      linear-gradient(180deg, rgba(7, 10, 19, 0.42), rgba(7, 10, 19, 0.80)),
+      url("/assets/nibachat-bg.png") center top / cover repeat-y;
   }
 
   body.landing-page {
     background-image:
-      linear-gradient(180deg, rgba(7, 10, 19, 0.42), rgba(7, 10, 19, 0.82)),
+      linear-gradient(180deg, rgba(7, 10, 19, 0.34), rgba(7, 10, 19, 0.76)),
       url("/assets/nibachat-bg.png");
     background-position: center top;
-    background-size: auto 100vh;
-    background-repeat: no-repeat;
+    background-size: cover;
+    background-repeat: repeat-y;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
     padding: 20px;
+  }
+
+  .landing-shell {
+    width: min(100% - 24px, 1180px);
+    padding: 16px 0 36px;
+  }
+
+  .landing-hero {
+    min-height: auto;
+    padding: 34px 0 24px;
+    gap: 22px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(34px, 12vw, 52px);
+    line-height: 1.02;
+  }
+
+  .landing-panel,
+  .landing-signup,
+  .landing-steps article {
+    background: rgba(15, 22, 42, 0.50);
+  }
+
+  .landing-signup {
+    margin-top: 18px;
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .signup-form {
+    gap: 14px;
   }
 
   .top-actions,
@@ -1304,5 +1353,11 @@ dd {
   .landing-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .landing-actions .button-link,
+  .landing-actions button,
+  .signup-form button {
+    width: 100%;
   }
 }
