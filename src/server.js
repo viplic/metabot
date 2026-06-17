@@ -163,8 +163,14 @@ async function handleWebhookPost(request, response) {
     return;
   }
 
-  sendJson(response, 200, { ok: true });
-  enqueueWebhookJob(payload, tenantId);
+  const processing = enqueueWebhookJob(payload, tenantId);
+  if (process.env.WEBHOOK_ASYNC === "true") {
+    sendJson(response, 200, { ok: true, mode: "queued" });
+    return;
+  }
+
+  await processing;
+  sendJson(response, 200, { ok: true, mode: "processed" });
 }
 
 async function processWebhookPayload(payload, tenantId = DEFAULT_TENANT_ID) {
@@ -904,6 +910,7 @@ function enqueueWebhookJob(payload, tenantId = DEFAULT_TENANT_ID) {
       webhookQueueDepth -= 1;
       setGauge("webhook.queue_depth", webhookQueueDepth);
     });
+  return webhookQueue;
 }
 
 function isWebhookPath(pathname) {
