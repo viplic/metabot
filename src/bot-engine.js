@@ -67,6 +67,7 @@ export async function routeIncomingMessage({
 
   const commerce = analyzeCommerceMessage({
     text: cleanText,
+    attachments,
     conversation,
     config,
     catalog: config.catalog || {}

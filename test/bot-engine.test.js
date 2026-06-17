@@ -615,6 +615,77 @@ test("commerce analyzer detects incomplete orders and missing fields", () => {
   assert.ok(result.missingFields.includes("street"));
 });
 
+test("commerce analyzer links product images to catalog price and note metadata", () => {
+  const commerce = analyzeCommerceMessage({
+    text: "Hocu ovo, tekst na proizvodu: Srecan rodjendan",
+    attachments: [
+      {
+        type: "image",
+        url: "https://shop.example.com/cdn/products/majica-alfa.jpg?width=900",
+        mimeType: "image/jpeg"
+      }
+    ],
+    catalog: {
+      products: [
+        {
+          name: "Majica Alfa",
+          price: "2400 RSD",
+          url: "https://shop.example.com/products/majica-alfa",
+          image: "https://shop.example.com/cdn/products/majica-alfa.jpg"
+        }
+      ]
+    },
+    config: {
+      orders: { requiredFields: ["product"] }
+    }
+  });
+
+  assert.equal(commerce.intent, "order");
+  assert.equal(commerce.extracted.product.name, "Majica Alfa");
+  assert.equal(commerce.extracted.product.price, "2400 RSD");
+  assert.equal(commerce.extracted.product.matchSource, "image_url");
+  assert.equal(commerce.extracted.product.matchConfidence, 0.98);
+  assert.equal(commerce.missingFields.length, 0);
+});
+
+test("OpenAI vision prompt includes compact product image catalog", () => {
+  const body = buildResponsesBody({
+    text: "Koja je cena?",
+    imageParts: [{ type: "input_image", image_url: "data:image/jpeg;base64,AAAA" }],
+    model: "gpt-5.5",
+    config: {
+      business: { name: "Shop Alfa", defaultReply: "Default" },
+      ai: {
+        model: "gpt-5.5",
+        maxInputChars: 1800,
+        maxOutputTokens: 320,
+        maxContextChars: 2600,
+        maxHistoryChars: 900,
+        temperature: 0.15,
+        systemPrompt: "Sys prompt"
+      },
+      automation: {},
+      catalog: {
+        products: [
+          {
+            name: "Majica Alfa",
+            price: "2400 RSD",
+            url: "https://shop.example.com/products/majica-alfa",
+            image: "https://shop.example.com/cdn/products/majica-alfa.jpg"
+          }
+        ]
+      },
+      orders: {}
+    },
+    conversation: { platformUserId: "user-1", messages: [] },
+    knowledgeMatches: []
+  });
+
+  assert.match(body.instructions, /Katalog proizvoda za prepoznavanje slika/);
+  assert.match(body.instructions, /Majica Alfa/);
+  assert.match(body.instructions, /2400 RSD/);
+});
+
 test("catalog snapshots convert into knowledge documents", () => {
   const docs = catalogToKnowledgeDocuments({
     products: [{ name: "Majica", price: "1990 RSD", description: "Pamucna majica", url: "https://shop.test/majica" }],

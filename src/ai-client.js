@@ -96,6 +96,7 @@ export function buildResponsesBody({ text, imageParts = [], config, conversation
     "Odgovaraj kratko, prirodno, poslovno i bez sablonskog ponavljanja prethodnih odgovora.",
     "Ne izmisljaj cene, rokove, politiku povrata, pravne informacije ni status porudzbine.",
     "Ako korisnik pita za proizvod, cenu, dostavu, zamenu, reklamaciju ili rok izrade, koristi iskljucivo pouzdan kontekst, katalog i pravila klijenta.",
+    imageParts.length ? buildProductImageCatalog(config.catalog || {}) : "",
     "Ako odgovor nije podrzan pravilima ili kontekstom, predlozi razgovor sa agentom.",
     history ? `Skorasnji tok razgovora:\n${history}` : "",
     context ? `Pouzdan kontekst iz baze znanja:\n${context}` : ""
@@ -251,6 +252,7 @@ export function buildGeminiBody({ text, imageParts = [], config, conversation, k
     "Ako korisnik posalje sliku, opisi samo ono sto je relevantno za korisnicku podrsku i postavi razumno potpitanje kada nije jasno sta zeli.",
     "Ne izmisljaj cene, rokove, politiku povrata, pravne informacije ni status porudzbine.",
     "Ako korisnik pita za proizvod, cenu, dostavu, zamenu, reklamaciju ili rok izrade, koristi iskljucivo pouzdan kontekst, katalog i pravila klijenta.",
+    imageParts.length ? buildProductImageCatalog(config.catalog || {}) : "",
     "Ako odgovor nije podrzan pravilima, slikom ili kontekstom, predlozi razgovor sa agentom.",
     history ? `Skorasnji tok razgovora:\n${history}` : "",
     context ? `Pouzdan kontekst iz baze znanja:\n${context}` : ""
@@ -344,6 +346,25 @@ function buildKnowledgeContext(matches, maxChars) {
     return `[${index + 1}] ${title}\n${body}`;
   });
   return parts.join("\n\n").slice(0, maxChars);
+}
+
+function buildProductImageCatalog(catalog) {
+  const products = (catalog.products || [])
+    .filter((product) => product.name || product.image || product.price)
+    .slice(0, 40)
+    .map((product, index) => [
+      `${index + 1}. ${product.name || "Proizvod"}`,
+      product.price ? `cena: ${product.price}` : "",
+      product.url ? `url: ${product.url}` : "",
+      product.image ? `slika: ${product.image}` : ""
+    ].filter(Boolean).join(" | "));
+
+  if (!products.length) return "";
+  return [
+    "Katalog proizvoda za prepoznavanje slika:",
+    products.join("\n"),
+    "Ako slika korisnika lici na proizvod iz kataloga, navedi naziv i cenu samo ako si dovoljno siguran. Ako nisi siguran, pitaj korisnika koji tacno model/proizvod zeli."
+  ].join("\n");
 }
 
 function buildConversationHistory(conversation, maxChars) {

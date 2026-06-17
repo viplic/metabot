@@ -5,11 +5,11 @@ const EXCHANGE_KEYWORDS = ["zamena", "zamenim", "velicina", "veličina", "drugi 
 const COMPLAINT_KEYWORDS = ["reklamacija", "osteceno", "oštećeno", "ne radi", "problem", "nezadovoljan", "nezadovoljna", "povrat", "refund"];
 const PRODUCTION_KEYWORDS = ["koliko dana", "rok", "izrada", "kada saljete", "kada šaljete", "kad stize", "kad stiže"];
 
-export function analyzeCommerceMessage({ text, conversation = {}, config = {}, catalog = {} }) {
+export function analyzeCommerceMessage({ text, attachments = [], conversation = {}, config = {}, catalog = {} }) {
   const cleanText = String(text || "").trim();
   const lower = normalize(cleanText);
   const intent = detectIntent(lower);
-  const extracted = extractOrderFields(cleanText, catalog);
+  const extracted = extractOrderFields(cleanText, catalog, attachments);
   const profile = { ...(conversation.profile || {}), ...(extracted.customer || {}) };
   const missingFields = intent === "order" ? missingOrderFields({ ...extracted, customer: profile }, config) : [];
 
@@ -77,7 +77,7 @@ function scoreIntent(intent, lower, extracted) {
   return Math.min(0.95, score);
 }
 
-function extractOrderFields(text, catalog) {
+function extractOrderFields(text, catalog, attachments = []) {
   const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
   const phone = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/)?.[0]?.replace(/\s+/g, " ").trim() || "";
   const postalCode = text.match(/\b\d{5}\b/)?.[0] || "";
@@ -87,7 +87,9 @@ function extractOrderFields(text, catalog) {
   const quantity = Number(text.match(/(?:x|kom|komada|kolicina|količina)\s?(\d{1,3})/i)?.[1] || text.match(/\b(\d{1,3})\s?(?:kom|komada)\b/i)?.[1] || 1);
   const color = text.match(/(?:boja|u boji|color)[:\s]+([A-Za-zÀ-ž\s-]{3,30})/i)?.[1]?.trim() || "";
   const model = text.match(/(?:model|velicina|veličina|size)[:\s]+([A-Za-zÀ-ž0-9\s-]{1,30})/i)?.[1]?.trim() || "";
-  const product = findMentionedProduct(text, catalog);
+  const textProduct = findMentionedProduct(text, catalog);
+  const imageProduct = findProductFromAttachments(attachments, catalog);
+  const product = textProduct || imageProduct?.product || null;
 
   return {
     customer: {
@@ -104,9 +106,12 @@ function extractOrderFields(text, catalog) {
       name: product?.name || "",
       url: product?.url || "",
       price: product?.price || "",
+      image: product?.image || "",
       color,
       model,
-      quantity
+      quantity,
+      matchSource: textProduct ? "text" : imageProduct?.source || "",
+      matchConfidence: imageProduct?.confidence || (textProduct ? 0.92 : 0)
     }
   };
 }
@@ -122,6 +127,37 @@ function extractCity(text) {
 function findMentionedProduct(text, catalog) {
   const lower = normalize(text);
   return (catalog.products || []).find((product) => product.name && lower.includes(normalize(product.name))) || null;
+}
+
+function findProductFromAttachments(attachments = [], catalog = {}) {
+  const imageAttachments = attachments.filter((attachment) =>
+    attachment.type === "image" || String(attachment.mimeType || "").startsWith("image/")
+  );
+  if (!imageAttachments.length) return null;
+
+  const products = catalog.products || [];
+  for (const attachment of imageAttachments) {
+    const attachmentUrl = normalizeUrlForMatch(attachment.url);
+    const attachmentFileTokens = urlTokens(attachment.url);
+    let best = null;
+
+    for (const product of products) {
+      if (!product.image) continue;
+      const productUrl = normalizeUrlForMatch(product.image);
+      if (attachmentUrl && productUrl && attachmentUrl === productUrl) {
+        return { product, source: "image_url", confidence: 0.98 };
+      }
+
+      const overlap = tokenOverlap(attachmentFileTokens, urlTokens(product.image));
+      if (overlap > 0 && (!best || overlap > best.confidence)) {
+        best = { product, source: "image_filename", confidence: Math.min(0.88, 0.55 + overlap) };
+      }
+    }
+
+    if (best && best.confidence >= 0.72) return best;
+  }
+
+  return null;
 }
 
 function missingOrderFields(extracted, config) {
@@ -147,4 +183,33 @@ function normalize(value) {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
+}
+
+function normalizeUrlForMatch(value) {
+  try {
+    const url = new URL(String(value || ""));
+    url.search = "";
+    url.hash = "";
+    return url.toString().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function urlTokens(value) {
+  try {
+    const pathname = new URL(String(value || "")).pathname;
+    return normalize(pathname)
+      .split(/[^a-z0-9]+/i)
+      .filter((token) => token.length >= 4 && !/^\d+$/.test(token));
+  } catch {
+    return [];
+  }
+}
+
+function tokenOverlap(left, right) {
+  if (!left.length || !right.length) return 0;
+  const rightSet = new Set(right);
+  const hits = left.filter((token) => rightSet.has(token)).length;
+  return hits / Math.max(left.length, right.length);
 }

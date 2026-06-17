@@ -677,7 +677,7 @@ async function recordCommerceOutcome({ tenantId, config, conversation, incoming,
       intent: commerce.intent,
       description: incoming.text
     },
-    notes: incoming.text,
+    notes: commerceRecordNotes(incoming, commerce),
     missingFields: commerce.missingFields || []
   });
 
@@ -693,6 +693,24 @@ async function recordCommerceOutcome({ tenantId, config, conversation, incoming,
   }
 
   return record;
+}
+
+function commerceRecordNotes(incoming, commerce) {
+  const parts = [];
+  const text = String(incoming.text || "").trim();
+  if (text) parts.push(text);
+
+  const attachments = incoming.attachments || [];
+  if (attachments.length) {
+    parts.push(`Kupac je poslao ${attachments.length} sliku/fajl.`);
+  }
+
+  const product = commerce.extracted?.product || {};
+  if (product.name && product.matchSource) {
+    parts.push(`Prepoznat proizvod: ${product.name}${product.price ? ` (${product.price})` : ""}. Izvor: ${product.matchSource}.`);
+  }
+
+  return parts.join(" ");
 }
 
 async function recordUsageOutcome({ tenantId, config, incoming, result }) {
