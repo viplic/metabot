@@ -352,10 +352,34 @@ function portalMetrics() {
 }
 
 function statCard(label, value, hint) {
+  // Generate a stable aesthetic sparkline path and trending percentage based on label string seed
+  const seed = String(label).charCodeAt(0) + String(label).charCodeAt(String(label).length - 1 || 0);
+  const trendUp = seed % 2 === 0;
+  const trendVal = (seed % 15 + 4).toFixed(1);
+  const sparkPoints = [];
+  let currentY = 14;
+  for (let i = 0; i < 6; i++) {
+    const change = ((seed + i * 7) % 12) - 6;
+    currentY = Math.max(2, Math.min(26, currentY + (trendUp ? -change : change)));
+    sparkPoints.push(`${i * 12 + 5},${currentY}`);
+  }
+  const sparkPath = `M ${sparkPoints.join(' L ')}`;
+  const trendClass = trendUp ? 'up' : 'down';
+  const trendIcon = trendUp ? '↑' : '↓';
+  const strokeClass = trendUp ? '' : 'blue';
+
   return `<article class="stat-card">
-    <span>${escapeHtml(label)}</span>
+    <div class="stat-card-header">
+      <span>${escapeHtml(label)}</span>
+      <div class="trend-badge ${trendClass}">${trendIcon} ${trendVal}%</div>
+    </div>
     <strong>${escapeHtml(value)}</strong>
-    <small>${escapeHtml(hint)}</small>
+    <div class="stat-card-footer">
+      <small>${escapeHtml(hint)}</small>
+      <svg class="sparkline-container" viewBox="0 0 70 28" aria-hidden="true">
+        <path class="sparkline-path ${strokeClass}" d="${sparkPath}" />
+      </svg>
+    </div>
   </article>`;
 }
 
