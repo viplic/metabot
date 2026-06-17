@@ -182,7 +182,7 @@ function renderDashboard() {
             <span class="typing-dot"></span>
             <span class="typing-dot"></span>
           </div>
-          <div class="chat-msg bot-msg reply-msg">Zdravo! Imamo srebrnu ogrlicu na stanju po ceni od 2.400 RSD. Dostava je besplatna za sve porudžbine preko 4.000 RSD, inače je 350 RSD. Želite li da vam pošaljem link za naručivanje?</div>
+          <div class="chat-msg bot-msg reply-msg">Zdravo! Imamo srebrnu ogrlicu na stanju po ceni od 2.400 RSD. Dostava je besplatna za sve porudžbine preko 4.000 RSD, inače je 350 RSD. Ako želite da poručite, ostavite ime, prezime, adresu i broj telefona.</div>
         </div>
       </div>`
     )}
@@ -989,6 +989,10 @@ function renderTest() {
         <label for="testText">Poruka</label>
         <textarea id="testText">Koje je radno vreme?</textarea>
       </div>
+      <label class="toggle-row full" for="testAllowAi">
+        <input id="testAllowAi" type="checkbox" />
+        <span>Koristi pravi AI fallback u testu</span>
+      </label>
     </div>
     <div class="actions"><button id="runTest" class="primary">Testiraj</button></div>
     <div id="testResult" class="test-result"></div>`
@@ -1000,7 +1004,8 @@ function renderTest() {
       body: JSON.stringify({
         tenantId: currentTenantId,
         channelType: panels.test.querySelector("#testChannel").value,
-        text: panels.test.querySelector("#testText").value
+        text: panels.test.querySelector("#testText").value,
+        allowAi: panels.test.querySelector("#testAllowAi").checked
       })
     });
     renderTestResult(result);

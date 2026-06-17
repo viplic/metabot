@@ -123,7 +123,7 @@ function getCookie(headers, name) {
   return "";
 }
 
-function safeStringEqual(left, right) {
+export function safeStringEqual(left, right) {
   const leftBuffer = Buffer.from(String(left || ""));
   const rightBuffer = Buffer.from(String(right || ""));
   if (leftBuffer.length !== rightBuffer.length) return false;

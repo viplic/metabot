@@ -31,6 +31,7 @@ import {
   getVerifyToken,
   isLocalHost,
   redactValue,
+  safeStringEqual,
   shouldRequireSignature,
   verifyAdminAuth,
   verifyMetaSignature
@@ -84,8 +85,16 @@ export async function handleRequest(request, response) {
       return await handleWebhookPost(request, response);
     }
 
+    if (url.pathname === "/client-api/login" || url.pathname === "/client-api/signup") {
+      if (!allowRequest(request, response, "client_auth", Number(process.env.CLIENT_AUTH_RATE_LIMIT_PER_MINUTE || 30))) return;
+    }
+
     if (url.pathname.startsWith("/client-api/")) {
       return await handleClientApi(request, response, url);
+    }
+
+    if (url.pathname === "/auth/admin-login") {
+      if (!allowRequest(request, response, "admin_login", Number(process.env.ADMIN_LOGIN_RATE_LIMIT_PER_MINUTE || 20))) return;
     }
 
     if (url.pathname.startsWith("/auth/")) {
@@ -357,7 +366,7 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/test-message") {
     const body = await readJsonBody(request);
     const tenantId = body.tenantId || url.searchParams.get("tenantId") || DEFAULT_TENANT_ID;
-    const config = await loadTenantConfig(tenantId);
+    const config = testMessageConfig(await loadTenantConfig(tenantId), body);
     const conversation = {
       id: "test",
       platformUserId: "test-user",
@@ -374,7 +383,7 @@ async function handleApi(request, response, url) {
       channelType: body.channelType || "messenger",
       eventTimestamp: body.eventTimestamp || Date.now()
     });
-    return sendJson(response, 200, { result, conversation });
+    return sendJson(response, 200, { result, conversation, aiFallbackEnabled: Boolean(config.ai?.enabled) });
   }
 
   if (request.method === "POST" && url.pathname === "/api/privacy/delete-customer") {
@@ -453,8 +462,8 @@ async function handleClientApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/client-api/test-message") {
-    const config = await loadTenantConfig(tenant.id);
     const body = await readJsonBody(request);
+    const config = testMessageConfig(await loadTenantConfig(tenant.id));
     const conversation = {
       id: "test",
       platformUserId: "test-user",
@@ -471,7 +480,7 @@ async function handleClientApi(request, response, url) {
       channelType: body.channelType || "messenger",
       eventTimestamp: body.eventTimestamp || Date.now()
     });
-    return sendJson(response, 200, { result, conversation });
+    return sendJson(response, 200, { result, conversation, aiFallbackEnabled: false });
   }
 
   sendJson(response, 404, { error: "not_found" });
@@ -483,10 +492,11 @@ async function handleAuthApi(request, response, url) {
     const username = String(body.username || "").trim();
     const password = String(body.password || "");
 
-    if (username === getAdminUsername() && password === getAdminToken() && getAdminToken()) {
+    const adminToken = getAdminToken();
+    if (username === getAdminUsername() && adminToken && safeStringEqual(password, adminToken)) {
       response.writeHead(200, securityHeaders({
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `nibachat_admin=${encodeURIComponent(adminSessionValue(password))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 12}${process.env.VERCEL ? "; Secure" : ""}`
+        "Set-Cookie": `nibachat_admin=${encodeURIComponent(adminSessionValue(adminToken))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 12}${process.env.VERCEL ? "; Secure" : ""}`
       }));
       response.end(JSON.stringify({ ok: true, redirectTo: "/admin.html" }));
       return;
@@ -546,8 +556,8 @@ async function handleTenantApi(request, response, url, route) {
   }
 
   if (request.method === "POST" && route.resource === "test-message") {
-    const config = await loadTenantConfig(tenantId);
     const body = await readJsonBody(request);
+    const config = testMessageConfig(await loadTenantConfig(tenantId), body);
     const conversation = {
       id: "test",
       platformUserId: "test-user",
@@ -564,7 +574,7 @@ async function handleTenantApi(request, response, url, route) {
       channelType: body.channelType || "messenger",
       eventTimestamp: body.eventTimestamp || Date.now()
     });
-    return sendJson(response, 200, { result, conversation });
+    return sendJson(response, 200, { result, conversation, aiFallbackEnabled: Boolean(config.ai?.enabled) });
   }
 
   sendJson(response, 404, { error: "not_found" });
@@ -805,6 +815,17 @@ function mergeKnowledgeDocuments(existing, incoming) {
   return Array.from(byId.values());
 }
 
+export function testMessageConfig(config, body = {}) {
+  if (body.allowAi === true || body.useAi === true) return config;
+  return {
+    ...config,
+    ai: {
+      ...(config.ai || {}),
+      enabled: false
+    }
+  };
+}
+
 async function serveStatic(url, response) {
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const resolved = path.resolve(PUBLIC_DIR, `.${pathname}`);
@@ -818,7 +839,7 @@ async function serveStatic(url, response) {
     const ext = path.extname(resolved);
     response.writeHead(200, securityHeaders({
       "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-      "Cache-Control": "no-store"
+      "Cache-Control": cacheControlFor(pathname, ext)
     }));
     response.end(file);
   } catch (error) {
@@ -830,6 +851,13 @@ async function serveStatic(url, response) {
     }
     throw error;
   }
+}
+
+function cacheControlFor(pathname, ext) {
+  if (ext === ".html") return "no-store";
+  if (pathname.startsWith("/assets/")) return "public, max-age=31536000, immutable";
+  if (ext === ".css" || ext === ".js") return "public, max-age=300, must-revalidate";
+  return "no-store";
 }
 
 async function readJsonBody(request) {
@@ -1023,7 +1051,7 @@ function securityHeaders(headers = {}) {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     ...headers
   };
 }
