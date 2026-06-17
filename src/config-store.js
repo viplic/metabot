@@ -80,6 +80,7 @@ export async function createTenant(input = {}) {
   const id = uniqueTenantId(input.id || input.name || "klijent", tenants);
   const now = new Date().toISOString();
   const portalPassword = input.portalPassword || generatePortalPassword();
+  const shouldStorePortalPassword = Boolean(input.portalPassword) || input.status !== "pending";
   const tenant = normalizeTenant({
     id,
     name: input.name || `Klijent ${tenants.length + 1}`,
@@ -90,7 +91,7 @@ export async function createTenant(input = {}) {
     niche: input.niche || "",
     signupNote: input.signupNote || "",
     portalEnabled: input.portalEnabled ?? input.status !== "pending",
-    portalPasswordHash: input.status === "pending" ? "" : hashPortalPassword(portalPassword),
+    portalPasswordHash: shouldStorePortalPassword ? hashPortalPassword(portalPassword) : "",
     requestedAt: input.status === "pending" ? now : input.requestedAt,
     approvedAt: input.status === "active" ? now : input.approvedAt,
     createdAt: now,
@@ -118,15 +119,31 @@ export async function createTenant(input = {}) {
     }
   });
   await saveTenantConfig(tenant.id, config);
-  return { ...tenant, portalPassword: input.status === "pending" ? "" : portalPassword };
+  return { ...tenant, portalPassword: shouldStorePortalPassword && input.status !== "pending" ? portalPassword : "" };
 }
 
 export async function submitTenantSignup(input = {}) {
+  const password = String(input.password || "");
+  const ownerEmail = String(input.ownerEmail || "").trim();
+  if (!ownerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+    const error = new Error("Valid email is required.");
+    error.statusCode = 400;
+    error.code = "invalid_email";
+    throw error;
+  }
+  if (password.length < 8) {
+    const error = new Error("Password must have at least 8 characters.");
+    error.statusCode = 400;
+    error.code = "weak_password";
+    throw error;
+  }
+
   return createTenant({
     name: input.name,
-    ownerEmail: input.ownerEmail,
+    ownerEmail,
     niche: input.niche,
     signupNote: input.signupNote,
+    portalPassword: password,
     status: "pending",
     plan: "client",
     portalEnabled: false
@@ -143,10 +160,10 @@ export async function approveTenantSignup(tenantId) {
     error.code = "tenant_not_found";
     throw error;
   }
-  const password = generatePortalPassword();
   tenant.status = "active";
   tenant.portalEnabled = true;
-  tenant.portalPasswordHash = hashPortalPassword(password);
+  const password = tenant.portalPasswordHash ? "" : generatePortalPassword();
+  if (password) tenant.portalPasswordHash = hashPortalPassword(password);
   tenant.approvedAt = new Date().toISOString();
   tenant.updatedAt = tenant.approvedAt;
   await saveTenants(tenants);
@@ -191,9 +208,10 @@ export async function resetTenantPortalPassword(tenantId) {
 }
 
 export async function verifyTenantPortalAccess(tenantId, password) {
-  const id = normalizeTenantId(tenantId);
+  const login = String(tenantId || "").trim();
+  const id = normalizeTenantId(login);
   const tenants = await loadTenants();
-  const tenant = tenants.find((item) => item.id === id);
+  const tenant = tenants.find((item) => item.id === id || item.ownerEmail.toLowerCase() === login.toLowerCase());
   if (!tenant || tenant.status !== "active" || tenant.portalEnabled === false) return null;
   if (!tenant.portalPasswordHash) return null;
   if (!safeStringEqual(hashPortalPassword(password), tenant.portalPasswordHash)) return null;

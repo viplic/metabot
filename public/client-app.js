@@ -99,7 +99,7 @@ function renderLogin() {
     "Login za klijenta",
     `<form id="loginForm" class="grid">
       <div class="field">
-        <label for="tenantId">Klijent ID</label>
+        <label for="tenantId">Email ili klijent ID</label>
         <input id="tenantId" name="tenantId" value="${escapeAttr(urlTenant)}" />
       </div>
       <div class="field">

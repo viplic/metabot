@@ -413,7 +413,9 @@ function renderTenants() {
         body: "{}"
       });
       tenants = await fetchJson("/api/tenants");
-      window.alert(`Klijent odobren:\n${window.location.origin}/client.html?tenant=${access.tenantId}\n\nPassword:\n${access.password}`);
+      window.alert(access.password
+        ? `Klijent odobren:\n${window.location.origin}/login.html\n\nKlijent ID: ${access.tenantId}\nPrivremena lozinka: ${access.password}`
+        : `Klijent odobren:\n${window.location.origin}/login.html\n\nKlijent se loguje emailom ili ID-em i lozinkom koju je uneo na signup-u.`);
       renderTenants();
       renderTenantSelect();
     });

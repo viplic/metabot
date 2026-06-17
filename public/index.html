@@ -6,7 +6,7 @@
     <title>NibaChat</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="landing-page">
     <main class="landing-shell">
       <nav class="landing-nav">
         <div>
@@ -65,7 +65,7 @@
         <div>
           <p class="eyebrow">Signup</p>
           <h2>Prijava za klijentski nalog</h2>
-          <p>Posalji zahtev. Admin ga pregleda, odobrava i tek onda dobijas pristup portalu.</p>
+          <p>Unesi osnovne podatke i lozinku. Admin pregleda zahtev, odobrava nalog i posle toga se logujes svojim podacima.</p>
         </div>
         <form id="signupForm" class="signup-form">
           <div class="field">
@@ -75,6 +75,14 @@
           <div class="field">
             <label for="signupEmail">Email</label>
             <input id="signupEmail" name="ownerEmail" type="email" required placeholder="email@example.com" />
+          </div>
+          <div class="field">
+            <label for="signupPassword">Lozinka</label>
+            <input id="signupPassword" name="password" type="password" minlength="8" required autocomplete="new-password" placeholder="Minimum 8 karaktera" />
+          </div>
+          <div class="field">
+            <label for="signupPasswordConfirm">Ponovi lozinku</label>
+            <input id="signupPasswordConfirm" name="passwordConfirm" type="password" minlength="8" required autocomplete="new-password" />
           </div>
           <div class="field">
             <label for="signupNiche">Niche / sta prodajete</label>
