@@ -21,7 +21,7 @@
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
   --glow: 0 0 15px rgba(16, 185, 129, 0.2);
   --font-family: 'Plus Jakarta Sans', 'Outfit', system-ui, -apple-system, sans-serif;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease, opacity 0.12s ease;
 }
 
 * {
@@ -102,11 +102,10 @@ button {
 button:hover {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-1px);
 }
 
 button:active {
-  transform: translateY(0);
+  opacity: 0.82;
 }
 
 button.primary {
@@ -464,8 +463,17 @@ h3 {
   grid-template-columns: 180px minmax(0, 1fr) 320px;
   gap: 24px;
   padding: 24px;
-  max-width: 1600px;
+  max-width: 1680px;
   margin: 0 auto;
+}
+
+body[data-active-tab="tenants"] .layout {
+  grid-template-columns: 180px minmax(0, 1fr);
+  max-width: 1480px;
+}
+
+body[data-active-tab="tenants"] .side {
+  display: none;
 }
 
 .tabs {
@@ -493,7 +501,6 @@ h3 {
   background: rgba(255, 255, 255, 0.04);
   color: #ffffff;
   border-color: transparent;
-  transform: translateX(3px);
 }
 
 .tabs button.active {
@@ -751,15 +758,15 @@ h3 {
 
 .client-table {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .client-row {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.1fr) minmax(260px, 0.9fr) auto;
-  gap: 16px;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1fr) minmax(260px, 0.8fr) minmax(132px, auto);
+  gap: 18px;
   align-items: center;
-  padding: 16px;
+  padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.025);
@@ -800,7 +807,7 @@ h3 {
 .client-row-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .client-row-kpis span {
@@ -819,13 +826,40 @@ h3 {
 
 .client-row-links {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .client-row-links input {
   min-height: 34px;
   font-size: 12px;
+}
+
+.client-row > .actions {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.wizard-panel {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.wizard-panel .wizard-grid {
+  gap: 20px;
+}
+
+.wizard-grid section {
+  gap: 16px;
+}
+
+.wizard-grid .actions.full {
+  grid-column: 1 / -1;
+  margin-top: 4px;
 }
 
 .business-list {

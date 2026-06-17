@@ -31,12 +31,7 @@ document.querySelector("#tenantSelect").addEventListener("change", async (event)
     event.currentTarget.value = currentTenantId;
     return;
   }
-  currentTenantId = event.currentTarget.value;
-  dirty = false;
-  editingTenant = false;
-  await loadTenantWorkspace();
-  activateTab("dashboard");
-  setSaved("Ucitano", true);
+  await switchTenant(event.currentTarget.value, "dashboard");
 });
 
 try {
@@ -64,14 +59,21 @@ async function boot() {
   await loadTenantWorkspace();
   setEditMode(false);
   renderAll();
+  activateTab("dashboard");
   setSaved("Ucitano", true);
 }
 
 async function loadTenantWorkspace() {
-  config = normalizeClientConfig(await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/config`));
-  conversations = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/conversations`);
-  tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
-  dashboard = await fetchJson("/api/dashboard");
+  const [nextConfig, nextConversations, nextStore, nextDashboard] = await Promise.all([
+    fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/config`),
+    fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/conversations`),
+    fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`),
+    fetchJson("/api/dashboard")
+  ]);
+  config = normalizeClientConfig(nextConfig);
+  conversations = nextConversations;
+  tenantStore = nextStore;
+  dashboard = nextDashboard;
   renderTenantSelect();
   setEditMode(editingTenant);
   renderAll();
@@ -79,18 +81,24 @@ async function loadTenantWorkspace() {
 
 function renderAll() {
   const steps = [
-    ["business", renderBusiness],
     ["dashboard", renderDashboard],
     ["tenants", renderTenants],
-    ["channels", renderChannels],
-    ["automation", renderAutomation],
-    ["knowledge", renderKnowledge],
-    ["ai", renderAi],
-    ["handoff", renderHandoff],
-    ["privacy", renderPrivacy],
-    ["test", renderTest],
     ["sidebar", renderSidebar]
   ];
+  if (editingTenant) {
+    steps.splice(2, 0,
+      ["business", renderBusiness],
+      ["channels", renderChannels],
+      ["automation", renderAutomation],
+      ["knowledge", renderKnowledge],
+      ["ai", renderAi],
+      ["handoff", renderHandoff],
+      ["privacy", renderPrivacy],
+      ["test", renderTest]
+    );
+  } else {
+    clearEditorPanels();
+  }
 
   for (const [name, render] of steps) {
     try {
@@ -171,12 +179,7 @@ function renderDashboard() {
 
   panels.dashboard.querySelectorAll("[data-open-dashboard-tenant]").forEach((button) => {
     button.addEventListener("click", async () => {
-      currentTenantId = button.dataset.openDashboardTenant;
-      dirty = false;
-      editingTenant = false;
-      await loadTenantWorkspace();
-      activateTab("dashboard");
-      setSaved("Ucitano", true);
+      await switchTenant(button.dataset.openDashboardTenant, "dashboard");
     });
   });
   panels.dashboard.querySelector("[data-edit-current]")?.addEventListener("click", () => openTenantEditor(currentTenantId));
@@ -255,9 +258,12 @@ async function openTenantEditor(tenantId) {
   currentTenantId = tenantId || currentTenantId;
   dirty = false;
   editingTenant = true;
+  setEditMode(true);
+  activateTab("business", { keepEditMode: true });
+  setSaved("Ucitavam izmenu...", false);
   await loadTenantWorkspace();
   setEditMode(true);
-  activateTab("business");
+  activateTab("business", { keepEditMode: true });
   setSaved("Izmena otvorena", true);
 }
 
@@ -267,6 +273,34 @@ function setEditMode(enabled) {
     button.hidden = !editingTenant;
   });
   document.body.classList.toggle("editing-tenant", editingTenant);
+  if (!editingTenant) clearEditorPanels();
+}
+
+function clearEditorPanels() {
+  for (const name of ["business", "channels", "automation", "knowledge", "ai", "handoff", "privacy", "test"]) {
+    if (panels[name]) panels[name].innerHTML = "";
+  }
+}
+
+async function switchTenant(tenantId, tab = "dashboard") {
+  if (!tenantId || tenantId === currentTenantId && !editingTenant) {
+    activateTab(tab);
+    return;
+  }
+
+  currentTenantId = tenantId;
+  dirty = false;
+  editingTenant = false;
+  setEditMode(false);
+  renderTenantSelect();
+  renderDashboard();
+  renderSidebar();
+  activateTab(tab);
+  setSaved("Ucitavam...", false);
+
+  await loadTenantWorkspace();
+  activateTab(tab);
+  setSaved("Ucitano", true);
 }
 
 function renderTenantSelect() {
@@ -381,12 +415,7 @@ function renderTenants() {
   panels.tenants.querySelectorAll("[data-open-tenant]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (dirty && !window.confirm("Imas nesacuvane izmene. Nastaviti bez cuvanja?")) return;
-      currentTenantId = button.dataset.openTenant;
-      dirty = false;
-      editingTenant = false;
-      await loadTenantWorkspace();
-      activateTab("dashboard");
-      setSaved("Ucitano", true);
+      await switchTenant(button.dataset.openTenant, "dashboard");
     });
   });
   panels.tenants.querySelectorAll("[data-edit-tenant]").forEach((button) => {
@@ -999,9 +1028,15 @@ async function save() {
   }
 }
 
-function activateTab(tab) {
+function activateTab(tab, options = {}) {
+  if (!options.keepEditMode && (tab === "dashboard" || tab === "tenants")) {
+    editingTenant = false;
+    setEditMode(false);
+  }
+
   document.querySelectorAll(".tabs button").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
   Object.entries(panels).forEach(([name, panel]) => panel.classList.toggle("active", name === tab));
+  document.body.dataset.activeTab = tab;
 }
 
 function section(title, content) {
