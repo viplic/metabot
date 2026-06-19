@@ -1,8 +1,9 @@
 document.querySelector("#signupForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const formElement = event.currentTarget;
   const status = document.querySelector("#signupStatus");
-  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
-  const form = new FormData(event.currentTarget);
+  const submitButton = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
   const payload = Object.fromEntries(form.entries());
   payload.name = String(payload.name || "").trim();
   payload.ownerEmail = String(payload.ownerEmail || "").trim();
@@ -27,7 +28,7 @@ document.querySelector("#signupForm").addEventListener("submit", async (event) =
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(signupErrorMessage(result, response.status));
-    event.currentTarget.reset();
+    formElement.reset();
     status.textContent = "Zahtev je poslat. Kada admin odobri nalog, logujes se emailom/ID-em i lozinkom koju si uneo.";
   } catch (error) {
     status.textContent = error.message || "Nije uspelo povezivanje sa serverom. Osvezite stranicu i pokusajte ponovo.";
