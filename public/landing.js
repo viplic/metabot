@@ -21,6 +21,7 @@ document.querySelector("#signupForm").addEventListener("submit", async (event) =
   try {
     const response = await fetch("/client-api/signup", {
       method: "POST",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
@@ -29,7 +30,7 @@ document.querySelector("#signupForm").addEventListener("submit", async (event) =
     event.currentTarget.reset();
     status.textContent = "Zahtev je poslat. Kada admin odobri nalog, logujes se emailom/ID-em i lozinkom koju si uneo.";
   } catch (error) {
-    status.textContent = error.message || "Nije uspelo slanje zahteva. Pokusajte ponovo.";
+    status.textContent = error.message || "Nije uspelo povezivanje sa serverom. Osvezite stranicu i pokusajte ponovo.";
   } finally {
     if (submitButton) submitButton.disabled = false;
   }

@@ -880,7 +880,8 @@ async function serveStatic(url, response) {
 function cacheControlFor(pathname, ext) {
   if (ext === ".html") return "no-store";
   if (pathname.startsWith("/assets/")) return "public, max-age=31536000, immutable";
-  if (ext === ".css" || ext === ".js") return "public, max-age=300, must-revalidate";
+  if (ext === ".css") return "public, max-age=300, must-revalidate";
+  if (ext === ".js") return "no-store";
   return "no-store";
 }
 
