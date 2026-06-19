@@ -4,6 +4,9 @@ export async function appendRecordToSheet({ config, tenantId, record }) {
 
   const webhookUrl = sheets.webhookUrlEnv ? process.env[sheets.webhookUrlEnv] : sheets.webhookUrl;
   if (!webhookUrl) return { skipped: true, reason: "missing_sheets_webhook" };
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/i.test(webhookUrl)) {
+    throw new Error("Google Sheet webhook URL mora biti Google Apps Script /exec link, ne obican docs.google.com spreadsheet link.");
+  }
 
   const response = await fetch(webhookUrl, {
     method: "POST",

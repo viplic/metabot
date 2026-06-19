@@ -188,14 +188,14 @@ function renderBusiness() {
       ${textField("Vremenska zona", config.business.timezone, (value) => (config.business.timezone = value))}
       ${textArea("Opis niše i ponude", config.business.shortDescription, (value) => (config.business.shortDescription = value), "full")}
       ${textArea("Podrazumevani odgovor", config.business.defaultReply, (value) => (config.business.defaultReply = value), "full")}
-      ${textField("Privacy URL", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
-      ${textField("Data deletion URL", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value))}
+      ${textField("Link politike privatnosti", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
+      ${textField("Link za brisanje podataka", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value))}
       ${textField("URL sajta / shopa", config.catalog.sourceUrl, (value) => (config.catalog.sourceUrl = value), "full")}
       ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
       ${checkboxField("Automatski osvezavaj sajt", config.catalog.autoRefreshEnabled, (value) => (config.catalog.autoRefreshEnabled = value))}
       ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
-      ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
-      ${textField("Google Sheet webhook URL", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
+      ${textField("Google Sheet webhook URL za porudzbine", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
+      ${textField("Google Sheet pregledni link", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
   );
   panels.business.insertAdjacentHTML(

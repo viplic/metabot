@@ -570,16 +570,16 @@ function renderBusiness() {
       ${textField("Naziv", config.business.name, (value) => (config.business.name = value))}
       ${textField("Jezik", config.business.language, (value) => (config.business.language = value))}
       ${textField("Vremenska zona", config.business.timezone, (value) => (config.business.timezone = value))}
-      ${textField("Privacy URL", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
+      ${textField("Link politike privatnosti", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
       ${textArea("Kratak opis", config.business.shortDescription, (value) => (config.business.shortDescription = value), "full")}
       ${textArea("Podrazumevani odgovor", config.business.defaultReply, (value) => (config.business.defaultReply = value), "full")}
-      ${textField("Data deletion URL", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value), "full")}
+      ${textField("Link za brisanje podataka", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value), "full")}
       ${textField("URL sajta / shopa", config.catalog.sourceUrl, (value) => (config.catalog.sourceUrl = value), "full")}
       ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
       ${numberField("Mesecni AI limit ($)", config.usage.monthlyLimitUsd, (value) => (config.usage.monthlyLimitUsd = Number(value)))}
       ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
-      ${textField("Google Sheet webhook env", config.integrations.googleSheets.webhookUrlEnv, (value) => (config.integrations.googleSheets.webhookUrlEnv = value))}
-      ${textField("Google Sheet URL", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
+      ${textField("Google Sheet webhook URL za porudzbine", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
+      ${textField("Google Sheet pregledni link", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
   )}`;
   panels.business.insertAdjacentHTML(
