@@ -171,7 +171,18 @@ export async function approveTenantSignup(tenantId) {
 }
 
 export async function rejectTenantSignup(tenantId) {
+  return deleteTenant(tenantId);
+}
+
+export async function deleteTenant(tenantId) {
   const id = normalizeTenantId(tenantId);
+  if (id === DEFAULT_TENANT_ID) {
+    const error = new Error("Default tenant cannot be deleted.");
+    error.statusCode = 400;
+    error.code = "default_tenant_protected";
+    throw error;
+  }
+
   const tenants = await loadTenants();
   const tenant = tenants.find((item) => item.id === id);
   if (!tenant) {
@@ -180,10 +191,17 @@ export async function rejectTenantSignup(tenantId) {
     error.code = "tenant_not_found";
     throw error;
   }
-  tenant.status = "rejected";
-  tenant.portalEnabled = false;
-  tenant.updatedAt = new Date().toISOString();
-  await saveTenants(tenants);
+
+  if (hasDatabase()) {
+    const sql = await getSql();
+    await sql`DELETE FROM raw_events WHERE tenant_id = ${id}`;
+    await sql`DELETE FROM processed_events WHERE tenant_id = ${id}`;
+    await sql`DELETE FROM tenants WHERE id = ${id}`;
+  } else {
+    await saveTenants(tenants.filter((item) => item.id !== id));
+    await removeTenantFiles(id);
+  }
+
   return tenant;
 }
 
@@ -590,6 +608,24 @@ function uniqueTenantId(value, tenants) {
 
 function tenantConfigPath(tenantId) {
   return path.join(TENANT_CONFIG_DIR, `${normalizeTenantId(tenantId)}.config.json`);
+}
+
+async function removeTenantFiles(tenantId) {
+  const id = normalizeTenantId(tenantId);
+  const tenantDir = path.join(DATA_DIR, "tenants");
+  const files = [
+    tenantConfigPath(id),
+    path.join(tenantDir, `${id}.conversations.json`),
+    path.join(tenantDir, `${id}.store.json`)
+  ];
+
+  await Promise.all(files.map(async (filePath) => {
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }));
 }
 
 function slugId(value) {

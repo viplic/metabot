@@ -487,6 +487,7 @@ function renderTenants() {
 
   panels.tenants.querySelectorAll("[data-reject-tenant]").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (!window.confirm("Odbiti i trajno obrisati ovaj zahtev iz baze?")) return;
       await fetchJson(`/api/tenants/${encodeURIComponent(button.dataset.rejectTenant)}/reject`, {
         method: "POST",
         body: "{}"
@@ -494,6 +495,24 @@ function renderTenants() {
       tenants = await fetchJson("/api/tenants");
       renderTenants();
       renderTenantSelect();
+    });
+  });
+
+  panels.tenants.querySelectorAll("[data-delete-tenant]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!window.confirm("Trajno obrisati klijenta i sve njegove podatke iz baze?")) return;
+      await fetchJson(`/api/tenants/${encodeURIComponent(button.dataset.deleteTenant)}`, {
+        method: "DELETE"
+      });
+      if (currentTenantId === button.dataset.deleteTenant) {
+        currentTenantId = "default";
+        await loadTenantWorkspace();
+      }
+      tenants = await fetchJson("/api/tenants");
+      renderTenants();
+      renderTenantSelect();
+      renderSidebar();
+      setSaved("Klijent obrisan", true);
     });
   });
 }
@@ -522,7 +541,7 @@ function tenantItem(tenant) {
     </div>
     <div class="actions">
       <button data-open-tenant="${escapeAttr(tenant.id)}">Dashboard</button>
-      ${tenant.status === "pending" ? `<button class="primary" data-approve-tenant="${escapeAttr(tenant.id)}">Odobri</button><button class="danger" data-reject-tenant="${escapeAttr(tenant.id)}">Odbij</button>` : `<button class="primary" data-edit-tenant="${escapeAttr(tenant.id)}">Izmeni</button><button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>`}
+      ${tenant.status === "pending" ? `<button class="primary" data-approve-tenant="${escapeAttr(tenant.id)}">Odobri</button><button class="danger" data-reject-tenant="${escapeAttr(tenant.id)}">Odbij</button>` : `<button class="primary" data-edit-tenant="${escapeAttr(tenant.id)}">Izmeni</button><button data-reset-tenant="${escapeAttr(tenant.id)}">Reset login</button>${tenant.id === "default" ? "" : `<button class="danger" data-delete-tenant="${escapeAttr(tenant.id)}">Obrisi</button>`}`}
     </div>
   </article>`;
 }

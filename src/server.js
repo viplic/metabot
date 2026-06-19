@@ -6,6 +6,7 @@ import { loadDotEnv } from "./env.js";
 import {
   DEFAULT_TENANT_ID,
   createTenant,
+  deleteTenant,
   approveTenantSignup,
   loadConfig,
   loadTenantConfig,
@@ -352,7 +353,13 @@ async function handleApi(request, response, url) {
     if (approvalRoute[2] === "approve") {
       return sendJson(response, 200, await approveTenantSignup(tenantId));
     }
-    return sendJson(response, 200, publicTenant(await rejectTenantSignup(tenantId)));
+    return sendJson(response, 200, { deleted: publicTenant(await rejectTenantSignup(tenantId)) });
+  }
+
+  const deleteRoute = url.pathname.match(/^\/api\/tenants\/([^/]+)$/);
+  if (deleteRoute && request.method === "DELETE") {
+    const tenantId = normalizeTenantId(deleteRoute[1]);
+    return sendJson(response, 200, { deleted: publicTenant(await deleteTenant(tenantId)) });
   }
 
   const tenantRoute = matchTenantApiRoute(url.pathname);
