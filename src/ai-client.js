@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { buildCommerceSystemGuidance } from "./order-intelligence.js";
+import { decryptSecret, looksLikeEnvName } from "./secrets.js";
 
 export async function askAiFallback({ text, attachments = [], config, conversation, knowledgeMatches = [] }) {
   if (!config.ai.enabled) return null;
@@ -10,7 +11,7 @@ export async function askAiFallback({ text, attachments = [], config, conversati
 
   if (config.ai.provider !== "openai") return null;
 
-  const apiKey = process.env[config.ai.apiKeyEnv || "OPENAI_API_KEY"];
+  const apiKey = getAiApiKey(config, "OPENAI_API_KEY");
   if (!apiKey) {
     return handoffOrNull(config, "missing_ai_api_key");
   }
@@ -50,7 +51,7 @@ export async function askAiFallback({ text, attachments = [], config, conversati
 }
 
 async function askGeminiFallback({ text, attachments = [], config, conversation, knowledgeMatches = [] }) {
-  const apiKey = process.env[config.ai.apiKeyEnv || "GEMINI_API_KEY"];
+  const apiKey = getAiApiKey(config, "GEMINI_API_KEY");
   if (!apiKey) {
     return handoffOrNull(config, "missing_ai_api_key");
   }
@@ -83,6 +84,15 @@ async function askGeminiFallback({ text, attachments = [], config, conversation,
   } catch (error) {
     return handoffOrNull(config, "ai_error", error.message);
   }
+}
+
+export function getAiApiKey(config, fallbackEnv = "OPENAI_API_KEY") {
+  const storedKey = decryptSecret(config.ai?.apiKeyEncrypted || config.ai?.apiKeySecret || "");
+  if (storedKey) return storedKey;
+
+  const envName = config.ai?.apiKeyEnv || fallbackEnv;
+  if (envName && !looksLikeEnvName(envName)) return envName;
+  return process.env[envName] || process.env[fallbackEnv] || "";
 }
 
 export function buildResponsesBody({ text, imageParts = [], config, conversation, knowledgeMatches = [], model = null }) {

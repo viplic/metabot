@@ -607,7 +607,8 @@ async function maybeOpenTicket(config, conversation, incoming, result) {
   if (result.action !== "handoff") return;
   if (!config.handoff.ticketing.enabled) return;
 
-  const webhookUrl = process.env[config.handoff.ticketing.webhookUrlEnv || "TICKETING_WEBHOOK_URL"];
+  const webhookUrl = config.handoff.ticketing.webhookUrl ||
+    process.env[config.handoff.ticketing.webhookUrlEnv || "TICKETING_WEBHOOK_URL"];
   if (!webhookUrl) return;
 
   try {
@@ -806,7 +807,11 @@ async function buildDashboardSummary() {
           sourceUrl: config.catalog?.sourceUrl || store.catalog?.sourceUrl || "",
           provider: config.ai?.provider || "openai",
           model: config.ai?.model || "",
-          apiKeyEnv: config.ai?.apiKeyEnv || "",
+          apiConfigured: Boolean(
+            config.ai?.apiKeyEncrypted ||
+            config.ai?.apiKeySecret ||
+            (config.ai?.apiKeyEnv && (!looksLikeEnvName(config.ai.apiKeyEnv) || process.env[config.ai.apiKeyEnv]))
+          ),
           sheetUrl: config.integrations?.googleSheets?.sheetUrl || "",
           sheetsEnabled: Boolean(config.integrations?.googleSheets?.enabled)
         }
@@ -1022,6 +1027,24 @@ function prepareSecretsForSave(incoming, current = {}) {
     return next;
   });
 
+  prepared.ai ||= {};
+  current.ai ||= {};
+  const directAiKey = prepared.ai.apiKeyValue;
+  if (shouldPreserveSecretInput(directAiKey)) {
+    prepared.ai.apiKeyEncrypted = current.ai.apiKeyEncrypted ||
+      (current.ai.apiKeyEnv && !looksLikeEnvName(current.ai.apiKeyEnv) ? encryptSecret(current.ai.apiKeyEnv) : "");
+  } else {
+    prepared.ai.apiKeyEncrypted = encryptSecret(directAiKey);
+  }
+  delete prepared.ai.apiKeyValue;
+  delete prepared.ai.hasApiKey;
+
+  if (prepared.ai.apiKeyEnv && !looksLikeEnvName(prepared.ai.apiKeyEnv)) {
+    prepared.ai.apiKeyEncrypted = encryptSecret(prepared.ai.apiKeyEnv);
+    prepared.ai.apiKeyEnv = current.ai.apiKeyEnv ||
+      (prepared.ai.provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY");
+  }
+
   return prepared;
 }
 
@@ -1048,6 +1071,21 @@ function publicConfig(config) {
     delete next.pageAccessTokenEncrypted;
     return next;
   });
+
+  visible.ai ||= {};
+  const hasLegacyAiKey = Boolean(visible.ai.apiKeyEnv && !looksLikeEnvName(visible.ai.apiKeyEnv));
+  visible.ai.hasApiKey = hasStoredSecret(visible.ai.apiKeyEncrypted) || hasLegacyAiKey;
+  visible.ai.apiKeyValue = "";
+  if (hasLegacyAiKey) visible.ai.apiKeyEnv = visible.ai.provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+  delete visible.ai.apiKeyEncrypted;
+  delete visible.ai.apiKeyEnv;
+
+  if (visible.handoff?.ticketing) {
+    delete visible.handoff.ticketing.webhookUrlEnv;
+  }
+  if (visible.integrations?.googleSheets) {
+    delete visible.integrations.googleSheets.webhookUrlEnv;
+  }
 
   return visible;
 }

@@ -113,10 +113,7 @@ export async function createTenant(input = {}) {
       ...defaults.business,
       name: tenant.name
     },
-    ai: {
-      ...defaults.ai,
-      apiKeyEnv: `OPENAI_API_KEY_${tenant.id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`
-    }
+    ai: defaults.ai
   });
   await saveTenantConfig(tenant.id, config);
   return { ...tenant, portalPassword: shouldStorePortalPassword && input.status !== "pending" ? portalPassword : "" };
@@ -401,6 +398,7 @@ export function normalizeConfig(config) {
     monthlyLimitUsd: Number(normalized.usage?.monthlyLimitUsd || 20),
     warnAtPercent: Number(normalized.usage?.warnAtPercent || 80)
   };
+  normalized.ai.apiKeyEncrypted = normalized.ai.apiKeyEncrypted || "";
   normalized.integrations = normalized.integrations || {};
   normalized.integrations.googleSheets = {
     enabled: Boolean(normalized.integrations.googleSheets?.enabled),
@@ -421,6 +419,10 @@ export function normalizeConfig(config) {
     content: document.content || "",
     response: document.response || ""
   }));
+  normalized.handoff ||= {};
+  normalized.handoff.ticketing ||= {};
+  normalized.handoff.ticketing.webhookUrl = normalized.handoff.ticketing.webhookUrl || "";
+  normalized.handoff.ticketing.webhookUrlEnv = normalized.handoff.ticketing.webhookUrlEnv || "TICKETING_WEBHOOK_URL";
   normalized.privacy.retentionDays = Number(normalized.privacy.retentionDays || 30);
 
   return normalized;
@@ -518,10 +520,7 @@ function tenantDefaultConfig(defaults, tenant) {
       ...(defaults.privacy || {}),
       retentionDays: 30
     },
-    ai: {
-      ...defaults.ai,
-      apiKeyEnv: `OPENAI_API_KEY_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`
-    }
+    ai: defaults.ai
   });
 }
 

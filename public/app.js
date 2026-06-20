@@ -367,8 +367,8 @@ function renderTenants() {
         </section>
         <section>
           <h3>2. AI i API</h3>
-          <div class="field"><label for="newTenantApiEnv">API key env</label><input id="newTenantApiEnv" name="apiKeyEnv" placeholder="OPENAI_API_KEY_KLIJENT" /></div>
-          <div class="field"><label for="newTenantModel">Model</label><input id="newTenantModel" name="model" value="gpt-4.1-mini" /></div>
+          <div class="field"><label for="newTenantApiKey">AI API ključ</label><input id="newTenantApiKey" name="apiKeyValue" type="password" autocomplete="off" placeholder="sk-..." /></div>
+          <div class="field"><label for="newTenantModel">Model</label><input id="newTenantModel" name="model" value="gpt-5.5" /></div>
           <div class="field"><label for="newTenantLimit">Mesecni limit ($)</label><input id="newTenantLimit" name="monthlyLimitUsd" type="number" value="20" /></div>
         </section>
         <section>
@@ -406,7 +406,7 @@ function renderTenants() {
       })
     });
     const createdConfig = normalizeClientConfig(await fetchJson(`/api/tenants/${encodeURIComponent(tenant.id)}/config`));
-    createdConfig.ai.apiKeyEnv = form.get("apiKeyEnv") || createdConfig.ai.apiKeyEnv;
+    createdConfig.ai.apiKeyValue = form.get("apiKeyValue") || "";
     createdConfig.ai.model = form.get("model") || createdConfig.ai.model;
     createdConfig.usage.monthlyLimitUsd = Number(form.get("monthlyLimitUsd") || 20);
     createdConfig.catalog.sourceUrl = form.get("sourceUrl") || "";
@@ -926,13 +926,11 @@ function renderAi() {
       ${checkboxField("Ukljucen", config.ai.enabled, (value) => (config.ai.enabled = value))}
       ${selectField("Provider", config.ai.provider, ["openai", "gemini"], (value) => {
         config.ai.provider = value;
-        if (value === "gemini" && config.ai.apiKeyEnv === "OPENAI_API_KEY") config.ai.apiKeyEnv = "GEMINI_API_KEY";
         if (value === "gemini" && config.ai.model.startsWith("gpt-")) config.ai.model = "gemini-2.5-flash";
-        if (value === "openai" && config.ai.apiKeyEnv === "GEMINI_API_KEY") config.ai.apiKeyEnv = "OPENAI_API_KEY";
         if (value === "openai" && config.ai.model.startsWith("gemini-")) config.ai.model = "gpt-5.5";
       })}
       ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
-      ${textField("API key env", config.ai.apiKeyEnv, (value) => (config.ai.apiKeyEnv = value))}
+      ${secretField("AI API ključ", config.ai.apiKeyValue, Boolean(config.ai.hasApiKey), (value) => (config.ai.apiKeyValue = value), "full")}
       ${numberField("Max karaktera", config.ai.maxInputChars, (value) => (config.ai.maxInputChars = Number(value)))}
       ${numberField("Max izlaz tokena", config.ai.maxOutputTokens, (value) => (config.ai.maxOutputTokens = Number(value)))}
       ${numberField("Max kontekst", config.ai.maxContextChars, (value) => (config.ai.maxContextChars = Number(value)))}
@@ -971,7 +969,7 @@ function renderHandoff() {
       ${selectField("Mod", config.handoff.mode, ["conversation_routing", "manual_ticket", "inbox"], (value) => (config.handoff.mode = value))}
       ${textArea("Poruka", config.handoff.message, (value) => (config.handoff.message = value), "full")}
       ${checkboxField("Ticketing webhook", config.handoff.ticketing.enabled, (value) => (config.handoff.ticketing.enabled = value))}
-      ${textField("Webhook env", config.handoff.ticketing.webhookUrlEnv, (value) => (config.handoff.ticketing.webhookUrlEnv = value))}
+      ${textField("Webhook URL", config.handoff.ticketing.webhookUrl, (value) => (config.handoff.ticketing.webhookUrl = value), "full")}
       ${textField("Provider", config.handoff.ticketing.provider, (value) => (config.handoff.ticketing.provider = value))}
     </div>`
   );
@@ -1255,6 +1253,7 @@ function normalizeClientConfig(value) {
   normalized.ai ||= {};
   normalized.ai.model ||= "gpt-5.5";
   normalized.ai.apiKeyEnv ||= "OPENAI_API_KEY";
+  normalized.ai.apiKeyValue ||= "";
   normalized.ai.maxInputChars ||= 1800;
   normalized.ai.maxOutputTokens ||= 320;
   normalized.ai.maxContextChars ||= 2600;
@@ -1267,6 +1266,7 @@ function normalizeClientConfig(value) {
   normalized.ai.modelRouting.complexKeywords ||= [];
   normalized.handoff ||= {};
   normalized.handoff.ticketing ||= {};
+  normalized.handoff.ticketing.webhookUrl ||= "";
   normalized.privacy ||= {};
   normalized.catalog ||= {};
   normalized.catalog.sourceUrl ||= "";

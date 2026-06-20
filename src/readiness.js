@@ -1,5 +1,6 @@
 import { getAdminToken, getAppSecret, getVerifyToken, shouldRequireSignature } from "./security.js";
 import { getPageAccessToken } from "./meta-client.js";
+import { getAiApiKey } from "./ai-client.js";
 
 export function evaluateReadiness(config) {
   const checks = [];
@@ -23,13 +24,13 @@ export function evaluateReadiness(config) {
 
   if (config.ai.enabled) {
     const apiKeyEnv = config.ai.apiKeyEnv || (config.ai.provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY");
-    checks.push(check("ai_api_key", isRealSecret(process.env[apiKeyEnv]), `${apiKeyEnv} is required when AI fallback is enabled.`));
+    checks.push(check("ai_api_key", isRealSecret(getAiApiKey(config, apiKeyEnv)), "AI API key is required when AI fallback is enabled."));
     checks.push(check("ai_model", Boolean(config.ai.model), "AI model must be configured."));
   }
 
   if (config.handoff.ticketing.enabled) {
     const webhookEnv = config.handoff.ticketing.webhookUrlEnv || "TICKETING_WEBHOOK_URL";
-    checks.push(check("ticketing_webhook", isRealSecret(process.env[webhookEnv]), `${webhookEnv} is required when ticketing webhook is enabled.`));
+    checks.push(check("ticketing_webhook", isRealSecret(config.handoff.ticketing.webhookUrl || process.env[webhookEnv]), "Ticketing webhook URL is required when ticketing webhook is enabled."));
   }
 
   checks.push(check("retention", Number(config.privacy.retentionDays) > 0, "Retention must be a positive number of days."));
