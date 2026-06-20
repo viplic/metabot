@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { fetchWithTimeout } from "./http.js";
 
 const PRICE_PATTERN = /(?:RSD|rsd|din\.?|€|EUR|\$)\s?[\d.,]+|[\d.,]+\s?(?:RSD|rsd|din\.?|€|EUR|\$)/g;
 
@@ -87,11 +88,11 @@ export function catalogToKnowledgeDocuments(snapshot) {
 
 async function fetchPage(url) {
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         "User-Agent": "MetaBotCrawler/1.0 (+https://metabot.local)"
       }
-    });
+    }, 10000);
     if (!response.ok) return null;
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("text/html")) return null;

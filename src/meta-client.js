@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getAppSecret } from "./security.js";
 import { decryptSecret, looksLikeEnvName } from "./secrets.js";
+import { fetchWithTimeout } from "./http.js";
 
 export function normalizeMetaPayload(payload) {
   const events = [];
@@ -135,7 +136,7 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
     url.searchParams.set("appsecret_proof", appSecretProof);
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -143,7 +144,7 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
       messaging_type: "RESPONSE",
       message: { text }
     })
-  });
+  }, Number(config.meta.sendTimeoutMs || 10000));
 
   const body = await response.text();
   if (!response.ok) {
@@ -171,7 +172,7 @@ export async function fetchMetaUserProfile({ config, channel, platformUserId }) 
   }
 
   try {
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, {}, Number(config.meta.profileTimeoutMs || 5000));
     if (!response.ok) {
       console.warn(`Meta profile fetch failed: ${response.status} ${await response.text()}`);
       return null;

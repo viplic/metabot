@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { buildCommerceSystemGuidance } from "./order-intelligence.js";
 import { decryptSecret, looksLikeEnvName } from "./secrets.js";
+import { fetchWithTimeout } from "./http.js";
 
 export async function askAiFallback({ text, attachments = [], config, conversation, knowledgeMatches = [] }) {
   if (!config.ai.enabled) return null;
@@ -20,14 +21,14 @@ export async function askAiFallback({ text, attachments = [], config, conversati
     const imageParts = await buildOpenAiImageParts(attachments, config);
     const routing = selectOpenAiModel({ text, imageParts, config, knowledgeMatches });
     const body = buildResponsesBody({ text, imageParts, config, conversation, knowledgeMatches, model: routing.model });
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
-    });
+    }, Number(config.ai.requestTimeoutMs || 20000));
 
     const responseText = await response.text();
     if (!response.ok) {
@@ -60,11 +61,11 @@ async function askGeminiFallback({ text, attachments = [], config, conversation,
     const imageParts = await buildGeminiImageParts(attachments, config);
     const body = buildGeminiBody({ text, imageParts, config, conversation, knowledgeMatches });
     const model = encodeURIComponent(config.ai.model || "gemini-2.5-flash");
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
-    });
+    }, Number(config.ai.requestTimeoutMs || 20000));
 
     const responseText = await response.text();
     if (!response.ok) {
@@ -327,7 +328,7 @@ async function fetchImageAsDataUrl(attachment, config) {
 
 async function fetchImageBytes(attachment, config) {
   const maxBytes = Number(config.ai.maxImageBytes || 5 * 1024 * 1024);
-  const response = await fetch(attachment.url);
+  const response = await fetchWithTimeout(attachment.url, {}, Number(config.ai.imageFetchTimeoutMs || 8000));
   if (!response.ok) {
     throw new Error(`Image fetch failed ${response.status}`);
   }

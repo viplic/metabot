@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./http.js";
+
 export async function appendRecordToSheet({ config, tenantId, record }) {
   const sheets = config.integrations?.googleSheets;
   if (!sheets?.enabled) return { skipped: true, reason: "sheets_disabled" };
@@ -8,7 +10,7 @@ export async function appendRecordToSheet({ config, tenantId, record }) {
     throw new Error("Google Sheet webhook URL mora biti Google Apps Script /exec link, ne obican docs.google.com spreadsheet link.");
   }
 
-  const response = await fetch(webhookUrl, {
+  const response = await fetchWithTimeout(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -16,7 +18,7 @@ export async function appendRecordToSheet({ config, tenantId, record }) {
       record,
       row: toSheetRow(record)
     })
-  });
+  }, Number(sheets.timeoutMs || 10000));
 
   const text = await response.text();
   if (!response.ok) {

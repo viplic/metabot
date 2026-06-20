@@ -41,6 +41,7 @@ import { findChannel, normalizeMetaPayload, sendMetaText, fetchMetaUserProfile }
 import { crawlTenantSite, catalogToKnowledgeDocuments } from "./site-crawler.js";
 import { appendOrderRecord, appendUsageRecord, loadTenantStore, summarizeUsage, upsertCatalogSnapshot } from "./tenant-data.js";
 import { appendRecordToSheet } from "./sheets-client.js";
+import { fetchWithTimeout } from "./http.js";
 import {
   encryptSecret,
   hasStoredSecret,
@@ -612,7 +613,7 @@ async function maybeOpenTicket(config, conversation, incoming, result) {
   if (!webhookUrl) return;
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetchWithTimeout(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -623,7 +624,7 @@ async function maybeOpenTicket(config, conversation, incoming, result) {
         reason: result.reason,
         profile: conversation.profile
       })
-    });
+    }, Number(config.handoff.ticketing.timeoutMs || 8000));
 
     conversation.audit.push({
       actor: "ticketing",
