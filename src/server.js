@@ -39,7 +39,16 @@ import {
 } from "./security.js";
 import { findChannel, normalizeMetaPayload, sendMetaText, fetchMetaUserProfile } from "./meta-client.js";
 import { crawlTenantSite, catalogToKnowledgeDocuments } from "./site-crawler.js";
-import { appendOrderRecord, appendUsageRecord, loadTenantStore, summarizeUsage, upsertCatalogSnapshot } from "./tenant-data.js";
+import {
+  appendLearningMemory,
+  appendOrderRecord,
+  appendUsageRecord,
+  hasSimilarLearningMemory,
+  loadTenantStore,
+  summarizeUsage,
+  updateLearningMemory,
+  upsertCatalogSnapshot
+} from "./tenant-data.js";
 import { appendRecordToSheet } from "./sheets-client.js";
 import { fetchWithTimeout } from "./http.js";
 import {
@@ -236,6 +245,7 @@ async function processWebhookPayload(payload, tenantId = DEFAULT_TENANT_ID) {
       appendConversationMessages(conversation, incoming.text, result, config, incoming.attachments || []);
       await recordCommerceOutcome({ tenantId, config, conversation, incoming, result });
       await recordUsageOutcome({ tenantId, config, incoming, result });
+      await maybeCreateLearningSuggestion({ tenantId, conversation, incoming, result });
       await maybeOpenTicket(config, conversation, incoming, result);
 
       if (result.sendAllowed !== false && result.reply) {
@@ -369,6 +379,15 @@ async function handleApi(request, response, url) {
   if (deleteRoute && request.method === "DELETE") {
     const tenantId = normalizeTenantId(deleteRoute[1]);
     return sendJson(response, 200, { deleted: publicTenant(await deleteTenant(tenantId)) });
+  }
+
+  const learningRoute = url.pathname.match(/^\/api\/tenants\/([^/]+)\/learning(?:\/([^/]+)\/(approve|reject))?$/);
+  if (learningRoute) {
+    return handleLearningApi(request, response, url, {
+      tenantId: normalizeTenantId(learningRoute[1]),
+      memoryId: learningRoute[2] || "",
+      action: learningRoute[3] || ""
+    });
   }
 
   const tenantRoute = matchTenantApiRoute(url.pathname);
@@ -604,6 +623,62 @@ async function handleTenantApi(request, response, url, route) {
   sendJson(response, 404, { error: "not_found" });
 }
 
+async function handleLearningApi(request, response, url, route) {
+  const tenantId = route.tenantId;
+
+  if (request.method === "GET" && !route.memoryId) {
+    const store = await loadTenantStore(tenantId);
+    return sendJson(response, 200, store.memories || []);
+  }
+
+  if (request.method === "POST" && !route.memoryId && url.searchParams.get("action") === "generate") {
+    return sendJson(response, 200, await generateLearningSuggestionsFromConversations(tenantId));
+  }
+
+  if (request.method === "POST" && route.memoryId && route.action === "approve") {
+    const body = await readJsonBody(request);
+    const store = await loadTenantStore(tenantId);
+    const memory = store.memories.find((item) => item.id === route.memoryId);
+    if (!memory) return sendJson(response, 404, { error: "learning_memory_not_found" });
+
+    const question = String(body.question ?? memory.question ?? "").trim();
+    const answer = String(body.suggestedAnswer ?? memory.suggestedAnswer ?? "").trim();
+    if (!question || !answer) return sendJson(response, 400, { error: "question_and_answer_required" });
+
+    const config = await loadTenantConfig(tenantId);
+    const documentId = `learned-${route.memoryId}`;
+    const saved = await saveTenantConfig(tenantId, {
+      ...config,
+      knowledge: {
+        ...(config.knowledge || {}),
+        documents: mergeKnowledgeDocuments(config.knowledge?.documents || [], [{
+          id: documentId,
+          enabled: true,
+          title: question.slice(0, 120),
+          keywords: extractLearningKeywords(question),
+          content: `Pitanje kupca: ${question}\nProveren odgovor: ${answer}`,
+          response: answer
+        }])
+      }
+    });
+
+    const updated = await updateLearningMemory(tenantId, route.memoryId, {
+      status: "approved",
+      question,
+      suggestedAnswer: answer
+    });
+    return sendJson(response, 200, { memory: updated, config: publicConfig(saved) });
+  }
+
+  if (request.method === "POST" && route.memoryId && route.action === "reject") {
+    const updated = await updateLearningMemory(tenantId, route.memoryId, { status: "rejected" });
+    if (!updated) return sendJson(response, 404, { error: "learning_memory_not_found" });
+    return sendJson(response, 200, { memory: updated });
+  }
+
+  sendJson(response, 404, { error: "not_found" });
+}
+
 async function maybeOpenTicket(config, conversation, incoming, result) {
   if (result.action !== "handoff") return;
   if (!config.handoff.ticketing.enabled) return;
@@ -712,6 +787,84 @@ async function recordCommerceOutcome({ tenantId, config, conversation, incoming,
   }
 
   return record;
+}
+
+async function maybeCreateLearningSuggestion({ tenantId, conversation, incoming, result }) {
+  const question = String(incoming.text || "").trim();
+  if (!shouldSuggestLearning(question, result)) return null;
+  if (await hasSimilarLearningMemory(tenantId, question)) return null;
+
+  const suggestedAnswer = buildSuggestedLearningAnswer(result);
+  const memory = await appendLearningMemory(tenantId, {
+    status: "review",
+    question: question.slice(0, 800),
+    suggestedAnswer,
+    source: `conversation:${conversation.id}:${result.reason || result.action || "unknown"}`
+  });
+
+  conversation.audit.push({
+    actor: "learning",
+    action: "suggestion.created",
+    payload: { memoryId: memory.id, reason: result.reason || result.action },
+    createdAt: new Date().toISOString()
+  });
+
+  return memory;
+}
+
+function shouldSuggestLearning(question, result) {
+  if (!question || question.length < 8) return false;
+  if (result.action === "handoff") return true;
+  if (result.action === "fallback") return true;
+  if (result.reason === "ai_error" || result.reason === "missing_ai_api_key") return true;
+  if (result.action === "reply" && Number(result.confidence || 0) < 0.7) return true;
+  return false;
+}
+
+function buildSuggestedLearningAnswer(result) {
+  if (result.action === "reply" && result.reply) return result.reply.slice(0, 1200);
+  if (result.reason === "ai_error") {
+    return "Dodaj tacan odgovor koji automatizacija treba da koristi kada kupac postavi ovo pitanje.";
+  }
+  return "Upisi provereni odgovor pre odobravanja. Ne odobravaj ako odgovor nije siguran ili ako zavisi od trenutne dostupnosti/cene.";
+}
+
+function extractLearningKeywords(question) {
+  const words = String(question || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 4)
+    .slice(0, 8);
+  return [...new Set([question.slice(0, 80), ...words].filter(Boolean))];
+}
+
+async function generateLearningSuggestionsFromConversations(tenantId, limit = 25) {
+  const config = await loadTenantConfig(tenantId);
+  const conversations = pruneExpiredConversations(await loadConversations(tenantId), config.privacy.retentionDays);
+  let created = 0;
+
+  for (const conversation of conversations.slice(0, Number(limit || 25))) {
+    const messages = conversation.messages || [];
+    const lastUser = [...messages].reverse().find((message) => message.role === "user" && message.body);
+    if (!lastUser) continue;
+    const lastBot = [...messages].reverse().find((message) => message.role === "assistant" && message.body);
+    const pseudoResult = {
+      action: conversation.status === "handoff" ? "handoff" : "reply",
+      reason: conversation.status || "conversation_review",
+      confidence: conversation.status === "handoff" ? 0.2 : 0.62,
+      reply: lastBot?.body || ""
+    };
+    const memory = await maybeCreateLearningSuggestion({
+      tenantId,
+      conversation,
+      incoming: { text: lastUser.body },
+      result: pseudoResult
+    });
+    if (memory) created += 1;
+  }
+
+  return { created };
 }
 
 function commerceRecordNotes(incoming, commerce) {

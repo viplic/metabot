@@ -222,6 +222,59 @@ export async function appendLearningMemory(tenantId, memory) {
   return normalized;
 }
 
+export async function updateLearningMemory(tenantId, memoryId, updates = {}) {
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const rows = await sql`
+      UPDATE learning_memories
+      SET status = COALESCE(${updates.status || null}, status),
+          question = COALESCE(${updates.question || null}, question),
+          suggested_answer = COALESCE(${updates.suggestedAnswer || null}, suggested_answer),
+          source = COALESCE(${updates.source || null}, source)
+      WHERE tenant_id = ${tenantId} AND id = ${memoryId}
+      RETURNING id, status, question, suggested_answer, source, created_at
+    `;
+    const row = rows[0];
+    return row ? {
+      id: row.id,
+      status: row.status,
+      question: row.question,
+      suggestedAnswer: row.suggested_answer,
+      source: row.source,
+      createdAt: row.created_at
+    } : null;
+  }
+
+  const store = await loadTenantStore(tenantId);
+  const memory = store.memories.find((item) => item.id === memoryId);
+  if (!memory) return null;
+  Object.assign(memory, {
+    ...("status" in updates ? { status: updates.status } : {}),
+    ...("question" in updates ? { question: updates.question } : {}),
+    ...("suggestedAnswer" in updates ? { suggestedAnswer: updates.suggestedAnswer } : {}),
+    ...("source" in updates ? { source: updates.source } : {})
+  });
+  await saveTenantStore(tenantId, store);
+  return memory;
+}
+
+export async function hasSimilarLearningMemory(tenantId, question) {
+  const normalizedQuestion = normalizeLearningText(question);
+  if (!normalizedQuestion) return true;
+
+  const store = await loadTenantStore(tenantId);
+  return store.memories.some((memory) => normalizeLearningText(memory.question) === normalizedQuestion);
+}
+
+export function normalizeLearningText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
 export function summarizeUsage(store, monthlyLimitUsd = 0) {
   const monthPrefix = new Date().toISOString().slice(0, 7);
   const month = store.usage.filter((item) => String(item.createdAt || "").startsWith(monthPrefix));

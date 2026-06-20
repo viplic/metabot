@@ -3,6 +3,7 @@ let tenants = [];
 let currentTenantId = "default";
 let conversations = [];
 let tenantStore = null;
+let learningMemories = [];
 let dashboard = null;
 let dirty = false;
 let editingTenant = false;
@@ -76,6 +77,7 @@ async function loadTenantWorkspace() {
   config = normalizeClientConfig(nextConfig);
   conversations = nextConversations;
   tenantStore = nextStore;
+  learningMemories = tenantStore.memories || [];
   dashboard = nextDashboard;
   renderTenantSelect();
   setEditMode(editingTenant);
@@ -782,6 +784,17 @@ function fieldItem(field) {
 
 function renderKnowledge() {
   panels.knowledge.innerHTML = section(
+    "Predlozi za ucenje",
+    `<div class="learning-actions">
+      <button id="generateLearningSuggestions" class="primary">Pronadji iz razgovora</button>
+      <span>${learningMemories.filter((memory) => memory.status === "review").length} ceka proveru</span>
+    </div>
+    <div class="collection">${learningMemories.length ? learningMemories.map(learningMemoryItem).join("") : `<article class="item"><p class="muted">Nema predloga za ucenje.</p></article>`}</div>`
+  );
+
+  panels.knowledge.insertAdjacentHTML(
+    "beforeend",
+    section(
     "Baza znanja",
     `<div class="grid three">
       ${checkboxField("Ukljucena", config.knowledge.enabled, (value) => (config.knowledge.enabled = value))}
@@ -791,6 +804,7 @@ function renderKnowledge() {
     </div>
     <div class="collection">${config.knowledge.documents.map(knowledgeDocumentItem).join("")}</div>
     <div class="actions"><button id="addKnowledgeDocument">Dodaj dokument</button></div>`
+    )
   );
 
   panels.knowledge.insertAdjacentHTML(
@@ -812,6 +826,13 @@ function renderKnowledge() {
   );
 
   bindInputs(panels.knowledge);
+  panels.knowledge.querySelector("#generateLearningSuggestions").addEventListener("click", generateLearningSuggestions);
+  panels.knowledge.querySelectorAll("[data-approve-learning]").forEach((button) => {
+    button.addEventListener("click", () => approveLearningMemory(button.dataset.approveLearning));
+  });
+  panels.knowledge.querySelectorAll("[data-reject-learning]").forEach((button) => {
+    button.addEventListener("click", () => rejectLearningMemory(button.dataset.rejectLearning));
+  });
   panels.knowledge.querySelector("#addKnowledgeDocument").addEventListener("click", () => {
     config.knowledge.documents.push({
       id: `knowledge-${Date.now()}`,
@@ -868,6 +889,61 @@ function renderKnowledge() {
       renderKnowledge();
     });
   });
+}
+
+function learningMemoryItem(memory) {
+  const pending = memory.status === "review";
+  return `<article class="item learning-memory ${pending ? "" : "is-muted"}">
+    <div class="item-header">
+      <h3>${escapeHtml(memory.status === "approved" ? "Odobreno" : memory.status === "rejected" ? "Odbaceno" : "Ceka proveru")}</h3>
+      <span class="pill ${memory.status === "approved" ? "success" : memory.status === "rejected" ? "danger" : "fallback"}">${escapeHtml(memory.status || "review")}</span>
+    </div>
+    <div class="grid">
+      ${textArea("Pitanje", memory.question, () => {}, "full").replace("<textarea", `<textarea data-learning-question="${escapeAttr(memory.id)}"`)}
+      ${textArea("Predlozeni odgovor", memory.suggestedAnswer, () => {}, "full").replace("<textarea", `<textarea data-learning-answer="${escapeAttr(memory.id)}"`)}
+    </div>
+    <div class="actions">
+      <button class="primary" data-approve-learning="${escapeAttr(memory.id)}" ${pending ? "" : "disabled"}>Odobri u znanje</button>
+      <button class="danger" data-reject-learning="${escapeAttr(memory.id)}" ${pending ? "" : "disabled"}>Odbaci</button>
+    </div>
+  </article>`;
+}
+
+async function generateLearningSuggestions() {
+  setSaved("Analiziram razgovore...", false);
+  const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/learning?action=generate`, {
+    method: "POST"
+  });
+  tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+  learningMemories = tenantStore.memories || [];
+  setSaved(`Dodato predloga: ${result.created}`, true);
+  renderKnowledge();
+}
+
+async function approveLearningMemory(memoryId) {
+  const question = panels.knowledge.querySelector(`[data-learning-question="${CSS.escape(memoryId)}"]`)?.value || "";
+  const suggestedAnswer = panels.knowledge.querySelector(`[data-learning-answer="${CSS.escape(memoryId)}"]`)?.value || "";
+  const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/learning/${encodeURIComponent(memoryId)}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ question, suggestedAnswer })
+  });
+  config = normalizeClientConfig(result.config);
+  tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+  learningMemories = tenantStore.memories || [];
+  dirty = false;
+  setSaved("Predlog dodat u znanje", true);
+  renderKnowledge();
+  renderSidebar();
+}
+
+async function rejectLearningMemory(memoryId) {
+  await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/learning/${encodeURIComponent(memoryId)}/reject`, {
+    method: "POST"
+  });
+  tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+  learningMemories = tenantStore.memories || [];
+  setSaved("Predlog odbacen", true);
+  renderKnowledge();
 }
 
 function knowledgeDocumentItem(document) {
