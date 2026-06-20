@@ -15,7 +15,6 @@ const panels = {
   channels: document.querySelector("#tab-channels"),
   automation: document.querySelector("#tab-automation"),
   knowledge: document.querySelector("#tab-knowledge"),
-  ai: document.querySelector("#tab-ai"),
   handoff: document.querySelector("#tab-handoff"),
   privacy: document.querySelector("#tab-privacy"),
   test: document.querySelector("#tab-test")
@@ -92,10 +91,9 @@ function renderAll() {
   if (editingTenant) {
     steps.splice(2, 0,
       ["business", renderBusiness],
-      ["channels", renderChannels],
+      ["channels", renderConnection],
       ["automation", renderAutomation],
       ["knowledge", renderKnowledge],
-      ["ai", renderAi],
       ["handoff", renderHandoff],
       ["privacy", renderPrivacy],
       ["test", renderTest]
@@ -620,8 +618,15 @@ function renderBusiness() {
   });
 }
 
-function renderChannels() {
-  panels.channels.innerHTML = section(
+function renderConnection() {
+  panels.channels.innerHTML = "";
+  renderAiSettings(panels.channels);
+  renderChannels({ append: true });
+}
+
+function renderChannels({ append = false } = {}) {
+  const target = panels.channels;
+  const content = section(
     "Meta API",
     `<div class="grid">
       ${textField("Graph API verzija", config.meta.graphApiVersion, (value) => (config.meta.graphApiVersion = value))}
@@ -631,8 +636,13 @@ function renderChannels() {
       ${secretField("Page access token", config.meta.pageAccessTokenValue, Boolean(config.meta.hasPageAccessToken), (value) => (config.meta.pageAccessTokenValue = value), "full")}
     </div>`
   );
+  if (append) {
+    target.insertAdjacentHTML("beforeend", content);
+  } else {
+    target.innerHTML = content;
+  }
 
-  panels.channels.insertAdjacentHTML(
+  target.insertAdjacentHTML(
     "beforeend",
     section(
     "Kanali",
@@ -662,7 +672,7 @@ function renderChannels() {
         hasPageAccessToken: false
       });
       markDirty();
-      renderChannels();
+      renderConnection();
       renderSidebar();
     });
   });
@@ -670,7 +680,7 @@ function renderChannels() {
     button.addEventListener("click", () => {
       config.channels = config.channels.filter((channel) => channel.id !== button.dataset.removeChannel);
       markDirty();
-      renderChannels();
+      renderConnection();
       renderSidebar();
     });
   });
@@ -908,7 +918,7 @@ function faqItem(faq) {
   </article>`;
 }
 
-function renderAi() {
+function renderAiSettings(target = panels.channels) {
   config.ai.modelRouting ||= {
     enabled: true,
     simpleModel: "gpt-5.4-nano",
@@ -920,7 +930,9 @@ function renderAi() {
     complexKeywords: []
   };
 
-  panels.ai.innerHTML = section(
+  target.insertAdjacentHTML(
+    "beforeend",
+    section(
     "AI fallback",
     `<div class="grid">
       ${checkboxField("Ukljucen", config.ai.enabled, (value) => (config.ai.enabled = value))}
@@ -940,9 +952,10 @@ function renderAi() {
       ${checkboxField("Greska vodi na handoff", config.ai.fallbackToHumanOnError, (value) => (config.ai.fallbackToHumanOnError = value))}
       ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
     </div>`
+    )
   );
 
-  panels.ai.insertAdjacentHTML(
+  target.insertAdjacentHTML(
     "beforeend",
     section(
       "Model routing",
@@ -958,7 +971,6 @@ function renderAi() {
       </div>`
     )
   );
-  bindInputs(panels.ai);
 }
 
 function renderHandoff() {
