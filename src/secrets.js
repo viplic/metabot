@@ -12,12 +12,11 @@ export function encryptSecret(value) {
   const cipher = crypto.createCipheriv("aes-256-gcm", secretKey(), iv);
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return [
-    ENCRYPTED_PREFIX,
+  return `${ENCRYPTED_PREFIX}${[
     iv.toString("base64url"),
     tag.toString("base64url"),
     encrypted.toString("base64url")
-  ].join(".");
+  ].join(".")}`;
 }
 
 export function decryptSecret(value) {
@@ -26,7 +25,7 @@ export function decryptSecret(value) {
   if (!isEncryptedSecret(text)) return text;
 
   const [, payload = ""] = text.split(ENCRYPTED_PREFIX);
-  const [ivRaw, tagRaw, encryptedRaw] = payload.split(".");
+  const [ivRaw, tagRaw, encryptedRaw] = payload.replace(/^\./, "").split(".");
   if (!ivRaw || !tagRaw || !encryptedRaw) return "";
 
   try {

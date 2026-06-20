@@ -2,7 +2,9 @@ import crypto from "node:crypto";
 import { decryptSecret, looksLikeEnvName } from "./secrets.js";
 
 export function getVerifyToken(config) {
-  return process.env.META_VERIFY_TOKEN || config.meta.verifyToken;
+  const tenantToken = String(config.meta?.verifyToken || "").trim();
+  if (tenantToken && tenantToken !== "change-this-token") return tenantToken;
+  return process.env.META_VERIFY_TOKEN || tenantToken;
 }
 
 export function getAppSecret(config) {
