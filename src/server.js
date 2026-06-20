@@ -42,6 +42,12 @@ import { crawlTenantSite, catalogToKnowledgeDocuments } from "./site-crawler.js"
 import { appendOrderRecord, appendUsageRecord, loadTenantStore, summarizeUsage, upsertCatalogSnapshot } from "./tenant-data.js";
 import { appendRecordToSheet } from "./sheets-client.js";
 import {
+  encryptSecret,
+  hasStoredSecret,
+  looksLikeEnvName,
+  shouldPreserveSecretInput
+} from "./secrets.js";
+import {
   appendRawEvent,
   deleteCustomerRawEvents,
   deleteCustomerData,
@@ -305,13 +311,15 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/config") {
-    return sendJson(response, 200, await loadTenantConfig(url.searchParams.get("tenantId") || DEFAULT_TENANT_ID));
+    return sendJson(response, 200, publicConfig(await loadTenantConfig(url.searchParams.get("tenantId") || DEFAULT_TENANT_ID)));
   }
 
   if (request.method === "PUT" && url.pathname === "/api/config") {
     const body = await readJsonBody(request);
-    const saved = await saveTenantConfig(url.searchParams.get("tenantId") || DEFAULT_TENANT_ID, body);
-    return sendJson(response, 200, saved);
+    const tenantId = url.searchParams.get("tenantId") || DEFAULT_TENANT_ID;
+    const current = await loadTenantConfig(tenantId);
+    const saved = await saveTenantConfig(tenantId, prepareSecretsForSave(body, current));
+    return sendJson(response, 200, publicConfig(saved));
   }
 
   if (request.method === "GET" && url.pathname === "/api/tenants") {
@@ -444,7 +452,7 @@ async function handleClientApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/client-api/config") {
-    return sendJson(response, 200, await loadTenantConfig(tenant.id));
+    return sendJson(response, 200, publicConfig(await loadTenantConfig(tenant.id)));
   }
 
   if (request.method === "GET" && url.pathname === "/client-api/store") {
@@ -465,7 +473,7 @@ async function handleClientApi(request, response, url) {
     const body = await readJsonBody(request);
     const current = await loadTenantConfig(tenant.id);
     const saved = await saveTenantConfig(tenant.id, mergeClientEditableConfig(current, body));
-    return sendJson(response, 200, saved);
+    return sendJson(response, 200, publicConfig(saved));
   }
 
   if (request.method === "GET" && url.pathname === "/client-api/conversations") {
@@ -534,7 +542,7 @@ async function handleTenantApi(request, response, url, route) {
   const tenantId = route.tenantId;
 
   if (request.method === "GET" && route.resource === "config") {
-    return sendJson(response, 200, await loadTenantConfig(tenantId));
+    return sendJson(response, 200, publicConfig(await loadTenantConfig(tenantId)));
   }
 
   if (request.method === "GET" && route.resource === "store") {
@@ -558,7 +566,9 @@ async function handleTenantApi(request, response, url, route) {
 
   if (request.method === "PUT" && route.resource === "config") {
     const body = await readJsonBody(request);
-    return sendJson(response, 200, await saveTenantConfig(tenantId, body));
+    const current = await loadTenantConfig(tenantId);
+    const saved = await saveTenantConfig(tenantId, prepareSecretsForSave(body, current));
+    return sendJson(response, 200, publicConfig(saved));
   }
 
   if (request.method === "GET" && route.resource === "conversations") {
@@ -955,6 +965,91 @@ function matchTenantApiRoute(pathname) {
     tenantId: normalizeTenantId(match[1]),
     resource: match[2]
   };
+}
+
+function prepareSecretsForSave(incoming, current = {}) {
+  const prepared = structuredClone(incoming || {});
+  prepared.meta ||= {};
+  current.meta ||= {};
+
+  const directAppSecret = prepared.meta.appSecretValue;
+  if (shouldPreserveSecretInput(directAppSecret)) {
+    prepared.meta.appSecretEncrypted = current.meta.appSecretEncrypted ||
+      (current.meta.appSecretEnv && !looksLikeEnvName(current.meta.appSecretEnv) ? encryptSecret(current.meta.appSecretEnv) : "");
+  } else {
+    prepared.meta.appSecretEncrypted = encryptSecret(directAppSecret);
+  }
+  delete prepared.meta.appSecretValue;
+  delete prepared.meta.hasAppSecret;
+
+  if (prepared.meta.appSecretEnv && !looksLikeEnvName(prepared.meta.appSecretEnv)) {
+    prepared.meta.appSecretEncrypted = encryptSecret(prepared.meta.appSecretEnv);
+    prepared.meta.appSecretEnv = current.meta.appSecretEnv || "META_APP_SECRET";
+  }
+
+  const directPageToken = prepared.meta.pageAccessTokenValue;
+  if (shouldPreserveSecretInput(directPageToken)) {
+    prepared.meta.pageAccessTokenEncrypted = current.meta.pageAccessTokenEncrypted ||
+      (current.meta.pageAccessTokenEnv && !looksLikeEnvName(current.meta.pageAccessTokenEnv) ? encryptSecret(current.meta.pageAccessTokenEnv) : "");
+  } else {
+    prepared.meta.pageAccessTokenEncrypted = encryptSecret(directPageToken);
+  }
+  delete prepared.meta.pageAccessTokenValue;
+  delete prepared.meta.hasPageAccessToken;
+
+  if (prepared.meta.pageAccessTokenEnv && !looksLikeEnvName(prepared.meta.pageAccessTokenEnv)) {
+    prepared.meta.pageAccessTokenEncrypted = encryptSecret(prepared.meta.pageAccessTokenEnv);
+    prepared.meta.pageAccessTokenEnv = current.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+  }
+
+  prepared.channels = (prepared.channels || []).map((channel, index) => {
+    const currentChannel = (current.channels || []).find((item) => item.id === channel.id) || current.channels?.[index] || {};
+    const next = { ...channel };
+    const directToken = next.pageAccessTokenValue;
+    if (shouldPreserveSecretInput(directToken)) {
+      next.pageAccessTokenEncrypted = currentChannel.pageAccessTokenEncrypted ||
+        (currentChannel.pageAccessTokenEnv && !looksLikeEnvName(currentChannel.pageAccessTokenEnv) ? encryptSecret(currentChannel.pageAccessTokenEnv) : "");
+    } else {
+      next.pageAccessTokenEncrypted = encryptSecret(directToken);
+    }
+    delete next.pageAccessTokenValue;
+    delete next.hasPageAccessToken;
+
+    if (next.pageAccessTokenEnv && !looksLikeEnvName(next.pageAccessTokenEnv)) {
+      next.pageAccessTokenEncrypted = encryptSecret(next.pageAccessTokenEnv);
+      next.pageAccessTokenEnv = currentChannel.pageAccessTokenEnv || prepared.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+    }
+    return next;
+  });
+
+  return prepared;
+}
+
+function publicConfig(config) {
+  const visible = structuredClone(config || {});
+  visible.meta ||= {};
+  const hasLegacyAppSecret = Boolean(visible.meta.appSecretEnv && !looksLikeEnvName(visible.meta.appSecretEnv));
+  const hasLegacyPageToken = Boolean(visible.meta.pageAccessTokenEnv && !looksLikeEnvName(visible.meta.pageAccessTokenEnv));
+  visible.meta.hasAppSecret = hasStoredSecret(visible.meta.appSecretEncrypted) || hasLegacyAppSecret;
+  visible.meta.hasPageAccessToken = hasStoredSecret(visible.meta.pageAccessTokenEncrypted) || hasLegacyPageToken;
+  visible.meta.appSecretValue = "";
+  visible.meta.pageAccessTokenValue = "";
+  if (hasLegacyAppSecret) visible.meta.appSecretEnv = "META_APP_SECRET";
+  if (hasLegacyPageToken) visible.meta.pageAccessTokenEnv = "META_PAGE_ACCESS_TOKEN";
+  delete visible.meta.appSecretEncrypted;
+  delete visible.meta.pageAccessTokenEncrypted;
+
+  visible.channels = (visible.channels || []).map((channel) => {
+    const next = { ...channel };
+    const hasLegacyChannelToken = Boolean(next.pageAccessTokenEnv && !looksLikeEnvName(next.pageAccessTokenEnv));
+    next.hasPageAccessToken = hasStoredSecret(next.pageAccessTokenEncrypted) || hasLegacyChannelToken;
+    next.pageAccessTokenValue = "";
+    if (hasLegacyChannelToken) next.pageAccessTokenEnv = visible.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+    delete next.pageAccessTokenEncrypted;
+    return next;
+  });
+
+  return visible;
 }
 
 function isPublicAsset(pathname) {

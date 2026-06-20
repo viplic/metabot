@@ -1,11 +1,15 @@
 import crypto from "node:crypto";
+import { decryptSecret, looksLikeEnvName } from "./secrets.js";
 
 export function getVerifyToken(config) {
   return process.env.META_VERIFY_TOKEN || config.meta.verifyToken;
 }
 
 export function getAppSecret(config) {
+  const storedSecret = decryptSecret(config.meta?.appSecretEncrypted || config.meta?.appSecretSecret || "");
+  if (storedSecret) return storedSecret;
   const envName = config.meta.appSecretEnv || "META_APP_SECRET";
+  if (envName && !looksLikeEnvName(envName)) return envName;
   return process.env[envName] || process.env.META_APP_SECRET || "";
 }
 

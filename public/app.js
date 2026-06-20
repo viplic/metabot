@@ -421,7 +421,9 @@ function renderTenants() {
         pageId: "",
         igAccountId: "",
         sendEnabled: false,
-        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
+        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN",
+        pageAccessTokenValue: "",
+        hasPageAccessToken: false
       }] : []),
       ...(form.get("instagram") ? [{
         id: `instagram-${Date.now()}`,
@@ -431,7 +433,9 @@ function renderTenants() {
         pageId: "",
         igAccountId: "",
         sendEnabled: false,
-        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
+        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN",
+        pageAccessTokenValue: "",
+        hasPageAccessToken: false
       }] : [])
     ];
     await fetchJson(`/api/tenants/${encodeURIComponent(tenant.id)}/config`, {
@@ -623,8 +627,8 @@ function renderChannels() {
       ${textField("Graph API verzija", config.meta.graphApiVersion, (value) => (config.meta.graphApiVersion = value))}
       ${textField("Verify token", config.meta.verifyToken, (value) => (config.meta.verifyToken = value))}
       ${checkboxField("Signature provera", config.meta.requireSignature, (value) => (config.meta.requireSignature = value))}
-      ${textField("App secret env", config.meta.appSecretEnv, (value) => (config.meta.appSecretEnv = value))}
-      ${textField("Page token env", config.meta.pageAccessTokenEnv, (value) => (config.meta.pageAccessTokenEnv = value), "full")}
+      ${secretField("App secret", config.meta.appSecretValue, Boolean(config.meta.hasAppSecret), (value) => (config.meta.appSecretValue = value))}
+      ${secretField("Page access token", config.meta.pageAccessTokenValue, Boolean(config.meta.hasPageAccessToken), (value) => (config.meta.pageAccessTokenValue = value), "full")}
     </div>`
   );
 
@@ -653,7 +657,9 @@ function renderChannels() {
         pageId: "",
         igAccountId: "",
         sendEnabled: false,
-        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN"
+        pageAccessTokenEnv: "META_PAGE_ACCESS_TOKEN",
+        pageAccessTokenValue: "",
+        hasPageAccessToken: false
       });
       markDirty();
       renderChannels();
@@ -683,7 +689,7 @@ function channelItem(channel) {
       ${textField("Naziv", channel.name, (value) => (channel.name = value))}
       ${textField("Page ID", channel.pageId, (value) => (channel.pageId = value))}
       ${textField("IG Account ID", channel.igAccountId, (value) => (channel.igAccountId = value))}
-      ${textField("Token env", channel.pageAccessTokenEnv, (value) => (channel.pageAccessTokenEnv = value), "full")}
+      ${secretField("Page access token za ovaj kanal", channel.pageAccessTokenValue, Boolean(channel.hasPageAccessToken), (value) => (channel.pageAccessTokenValue = value), "full")}
     </div>
   </article>`;
 }
@@ -1111,6 +1117,17 @@ function textField(label, value, setter, extraClass = "", id = "") {
   </div>`;
 }
 
+function secretField(label, value, hasValue, setter, extraClass = "", id = "") {
+  const inputId = id || `field-${Math.random().toString(16).slice(2)}`;
+  queueBinder(inputId, setter, "value");
+  const placeholder = hasValue ? "Sačuvano - nalepi novu vrednost samo ako menjas" : "";
+  return `<div class="field ${extraClass}">
+    <label for="${inputId}">${escapeHtml(label)}</label>
+    <input id="${inputId}" type="password" autocomplete="off" spellcheck="false" value="${escapeAttr(value || "")}" placeholder="${escapeAttr(placeholder)}" />
+    <small>${hasValue ? "Token je sačuvan šifrovano za ovog klijenta." : "Vrednost se čuva šifrovano i ne prikazuje se klijentima."}</small>
+  </div>`;
+}
+
 function numberField(label, value, setter, min = "", max = "", step = "1") {
   const inputId = `field-${Math.random().toString(16).slice(2)}`;
   queueBinder(inputId, setter, "value");
@@ -1220,7 +1237,13 @@ function normalizeClientConfig(value) {
   const normalized = structuredClone(value || {});
   normalized.business ||= {};
   normalized.meta ||= {};
+  normalized.meta.appSecretValue ||= "";
+  normalized.meta.pageAccessTokenValue ||= "";
   normalized.channels ||= [];
+  normalized.channels = normalized.channels.map((channel) => ({
+    ...channel,
+    pageAccessTokenValue: channel.pageAccessTokenValue || ""
+  }));
   normalized.automation ||= {};
   normalized.automation.rules ||= [];
   normalized.automation.faqs ||= [];

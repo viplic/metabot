@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getAppSecret } from "./security.js";
+import { decryptSecret, looksLikeEnvName } from "./secrets.js";
 
 export function normalizeMetaPayload(payload) {
   const events = [];
@@ -119,10 +120,9 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
     return { skipped: true, reason: "channel_send_disabled" };
   }
 
-  const tokenEnv = channel.pageAccessTokenEnv || config.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
-  const accessToken = process.env[tokenEnv];
+  const { accessToken, source } = getPageAccessToken(config, channel);
   if (!accessToken) {
-    return { skipped: true, reason: `missing_${tokenEnv}` };
+    return { skipped: true, reason: `missing_${source}` };
   }
 
   const version = config.meta.graphApiVersion || "v25.0";
@@ -154,8 +154,7 @@ export async function sendMetaText({ config, channel, recipientId, text }) {
 }
 
 export async function fetchMetaUserProfile({ config, channel, platformUserId }) {
-  const tokenEnv = channel.pageAccessTokenEnv || config.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
-  const accessToken = process.env[tokenEnv];
+  const { accessToken } = getPageAccessToken(config, channel);
   if (!accessToken) return null;
 
   const version = config.meta.graphApiVersion || "v25.0";
@@ -194,6 +193,23 @@ export async function fetchMetaUserProfile({ config, channel, platformUserId }) 
     console.error("Error fetching Meta user profile:", error);
     return null;
   }
+}
+
+export function getPageAccessToken(config, channel = {}) {
+  const storedToken = decryptSecret(
+    channel.pageAccessTokenEncrypted ||
+      channel.pageAccessTokenSecret ||
+      config.meta?.pageAccessTokenEncrypted ||
+      config.meta?.pageAccessTokenSecret ||
+      ""
+  );
+  if (storedToken) return { accessToken: storedToken, source: "stored_page_access_token" };
+
+  const tokenEnv = channel.pageAccessTokenEnv || config.meta?.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+  if (tokenEnv && !looksLikeEnvName(tokenEnv)) {
+    return { accessToken: tokenEnv, source: "stored_legacy_page_access_token" };
+  }
+  return { accessToken: process.env[tokenEnv] || "", source: tokenEnv };
 }
 
 export function findChannel(config, incoming) {

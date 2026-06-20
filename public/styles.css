@@ -1161,6 +1161,12 @@ body[data-active-tab="tenants"] .side {
   gap: 8px;
 }
 
+.field small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .field.full {
   grid-column: 1 / -1;
 }

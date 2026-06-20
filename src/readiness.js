@@ -1,4 +1,5 @@
 import { getAdminToken, getAppSecret, getVerifyToken, shouldRequireSignature } from "./security.js";
+import { getPageAccessToken } from "./meta-client.js";
 
 export function evaluateReadiness(config) {
   const checks = [];
@@ -16,7 +17,8 @@ export function evaluateReadiness(config) {
 
   for (const channel of config.channels.filter((item) => item.enabled && item.sendEnabled)) {
     const tokenEnv = channel.pageAccessTokenEnv || config.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
-    checks.push(check(`channel_token_${channel.id}`, isRealSecret(process.env[tokenEnv], "page-token-for-sending"), `${tokenEnv} is required for sending on ${channel.name}.`));
+    const { accessToken, source } = getPageAccessToken(config, channel);
+    checks.push(check(`channel_token_${channel.id}`, isRealSecret(accessToken, "page-token-for-sending"), `${source || tokenEnv} is required for sending on ${channel.name}.`));
   }
 
   if (config.ai.enabled) {

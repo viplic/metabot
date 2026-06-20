@@ -326,7 +326,8 @@ export function normalizeConfig(config) {
     pageId: channel.pageId || "",
     igAccountId: channel.igAccountId || "",
     sendEnabled: Boolean(channel.sendEnabled),
-    pageAccessTokenEnv: channel.pageAccessTokenEnv || normalized.meta?.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN"
+    pageAccessTokenEnv: channel.pageAccessTokenEnv || normalized.meta?.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN",
+    pageAccessTokenEncrypted: channel.pageAccessTokenEncrypted || ""
   }));
 
   normalized.automation.rules = ensureArray(normalized.automation?.rules).map((rule, index) => ({
