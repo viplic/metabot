@@ -1,5 +1,24 @@
-const ORDER_KEYWORDS = ["porucujem", "poručujem", "narucujem", "naručujem", "kupujem", "hoću", "hocu", "želim", "zelim", "uzeo bih", "uzela bih"];
-const DELIVERY_KEYWORDS = ["dostava", "postarina", "poštarina", "shipping", "kurir"];
+const ORDER_KEYWORDS = [
+  "porucujem",
+  "poručujem",
+  "narucujem",
+  "naručujem",
+  "kupujem",
+  "kupila bih",
+  "kupio bih",
+  "uzeo bih",
+  "uzela bih",
+  "hoću da porucim",
+  "hocu da porucim",
+  "hoću da poručim",
+  "zelim da porucim",
+  "želim da poručim",
+  "kako da porucim",
+  "kako da poručim",
+  "saljem podatke",
+  "šaljem podatke"
+];
+const DELIVERY_KEYWORDS = ["dostava", "dostave", "dostavu", "postarina", "poštarina", "shipping", "kurir"];
 const LATE_KEYWORDS = ["nije stigla", "nije stiglo", "kasni", "posiljka", "pošiljka", "tracking", "gde je", "porudzbina", "porudžbina"];
 const EXCHANGE_KEYWORDS = ["zamena", "zamenim", "velicina", "veličina", "drugi model", "druga boja"];
 const COMPLAINT_KEYWORDS = ["reklamacija", "osteceno", "oštećeno", "ne radi", "problem", "nezadovoljan", "nezadovoljna", "povrat", "refund"];
@@ -8,8 +27,8 @@ const PRODUCTION_KEYWORDS = ["koliko dana", "rok", "izrada", "kada saljete", "ka
 export function analyzeCommerceMessage({ text, attachments = [], conversation = {}, config = {}, catalog = {} }) {
   const cleanText = String(text || "").trim();
   const lower = normalize(cleanText);
-  const intent = detectIntent(lower);
   const extracted = extractOrderFields(cleanText, catalog, attachments);
+  const intent = detectIntent(lower, extracted);
   const profile = { ...(conversation.profile || {}), ...(extracted.customer || {}) };
   const missingFields = intent === "order" ? missingOrderFields({ ...extracted, customer: profile }, config) : [];
 
@@ -35,10 +54,12 @@ export function buildCommerceSystemGuidance({ config, catalog }) {
     "Ti si iskusan prodajni asistent za ovaj konkretan shop/brend.",
     "Odgovaraj prirodno, ljudski, smireno i kratko. Ne pominji da si AI, model, sistem ili automatizacija.",
     "Prepoznaj jezik korisnika i odgovori istim jezikom. Ako je korisnik pisao latinicom, odgovori latinicom; ako je pisao cirilicom, odgovori cirilicom.",
-    "Koristi samo informacije iz baze znanja, kataloga, sajta i pravilnika ovog klijenta. Ako podatak ne postoji, reci da mozes proveriti ili zamoli korisnika za precizniji model/proizvod.",
+    "Koristi samo informacije iz baze znanja, kataloga, sajta i pravilnika ovog klijenta. Ako podatak ne postoji, reci da mozes proveriti ili zamoli korisnika za naziv/opis proizvoda ili sliku.",
     "Ne izmisljaj cene, rokove, stanje posiljke, popuste, dostupnost, garanciju ili pravila zamene.",
-    "Ako korisnik zeli da poruci, prirodno ga vodi recenicom: \"Ukoliko zelite da porucite, ostavite podatke\" i trazi samo podatke koji fale.",
-    "Za porudzbinu prikupi: ime i prezime, ulica i broj, grad, postanski broj, broj telefona, proizvod/model/boju/varijantu i kolicinu ako je relevantno.",
+    "Ne trazi link od kupca. Ako kupac pita za proizvod, cenu, dostupnost, dostavu ili rok, odgovori normalno na pitanje koristeci katalog/kontekst; ako proizvod nije jasan, trazi naziv proizvoda ili sliku, ne link.",
+    "Ne trazi boju, model, varijantu, velicinu, adresu ili telefon dok kupac jasno ne kaze da zeli da poruci/kupi.",
+    "Tek kada korisnik jasno zeli da poruci, prirodno ga vodi recenicom: \"Ukoliko zelite da porucite, ostavite podatke\" i trazi samo podatke koji fale.",
+    "Za porudzbinu prikupi: ime i prezime, ulica i broj, grad, postanski broj, broj telefona, proizvod i kolicinu. Boju/model/varijantu trazi samo ako je taj podatak potreban za taj proizvod ili ga kupac nije naveo.",
     "Za reklamacije i kasnjenje posiljke smiri korisnika, reci da cemo proveriti/resiti situaciju, trazi kontakt i detalje, i ne obecavaj ishod koji nije u pravilima.",
     sourceUrl ? `Primarni izvor istine za shop je: ${sourceUrl}` : ""
   ].filter(Boolean).join("\n");
@@ -51,20 +72,21 @@ export function formatMissingOrderPrompt(missingFields) {
     street: "ulicu i broj",
     city: "grad",
     postalCode: "postanski broj",
-    product: "proizvod/model/boju koju zelite"
+    product: "proizvod koji zelite"
   };
   const missing = missingFields.map((field) => labels[field] || field);
   if (!missing.length) return "";
   return `Ukoliko zelite da porucite, ostavite jos: ${joinHuman(missing)}.`;
 }
 
-function detectIntent(lower) {
+function detectIntent(lower, extracted = {}) {
   if (COMPLAINT_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "complaint";
   if (EXCHANGE_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "exchange";
   if (LATE_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "late_shipment";
   if (DELIVERY_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "delivery_price";
   if (PRODUCTION_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "production_time";
   if (ORDER_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "order";
+  if (extracted.product?.name && /\b(hocu|hoću|zelim|želim|uzimam|uzecu|uzeću)\s+(ovo|taj|tu|to)\b/.test(lower)) return "order";
   return "question";
 }
 

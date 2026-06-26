@@ -615,6 +615,18 @@ test("commerce analyzer detects incomplete orders and missing fields", () => {
   assert.ok(result.missingFields.includes("street"));
 });
 
+test("commerce analyzer does not collect order details for normal price questions", () => {
+  const result = analyzeCommerceMessage({
+    text: "Zelim samo da znam cenu dostave i da li imate ovu narukvicu?",
+    conversation: { profile: {} },
+    config: { orders: { requiredFields: ["name", "phone", "street", "city", "postalCode", "product"] } },
+    catalog: { products: [{ name: "narukvicu", price: "2400 RSD" }] }
+  });
+
+  assert.equal(result.intent, "delivery_price");
+  assert.equal(result.missingFields.length, 0);
+});
+
 test("commerce analyzer links product images to catalog price and note metadata", () => {
   const commerce = analyzeCommerceMessage({
     text: "Hocu ovo, tekst na proizvodu: Srecan rodjendan",
