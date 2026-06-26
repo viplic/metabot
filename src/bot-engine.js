@@ -85,10 +85,34 @@ export async function routeIncomingMessage({
     });
   }
 
+  if (commerce.intent === "order" && !commerce.missingFields.length) {
+    return decision({
+      action: "reply",
+      reply: "Super, zabeležili smo porudžbinu. Javljamo se uskoro za potvrdu.",
+      confidence: commerce.confidence,
+      reason: "order_complete",
+      matched: commerce.extracted?.product?.name || "order",
+      profileUpdates,
+      commerce
+    });
+  }
+
+  if (commerce.extracted?.product?.name && hasImageAttachment(attachments) && isPriceQuestion(cleanText)) {
+    return decision({
+      action: "reply",
+      reply: formatProductPriceReply(commerce.extracted.product),
+      confidence: commerce.extracted.product.matchConfidence || 0.86,
+      reason: "image_product_price",
+      matched: commerce.extracted.product.name,
+      profileUpdates,
+      commerce
+    });
+  }
+
   if (commerce.intent === "late_shipment") {
     return decision({
       action: "reply",
-      reply: "Razumem, proverićemo pošiljku i rešiti situaciju. Pošaljite broj telefona ili podatke porudžbine kako bismo mogli da pronađemo porudžbinu.",
+      reply: "Razumem. Pošaljite broj telefona ili porudžbine da proverimo gde je pošiljka.",
       confidence: commerce.confidence,
       reason: "late_shipment",
       matched: "shipment_status",
@@ -97,10 +121,22 @@ export async function routeIncomingMessage({
     });
   }
 
+  if (commerce.intent === "exchange") {
+    return decision({
+      action: "reply",
+      reply: "Može, samo nam pošaljite broj porudžbine ili telefon, pa ćemo proveriti zamenu.",
+      confidence: commerce.confidence,
+      reason: "exchange",
+      matched: "exchange",
+      profileUpdates,
+      commerce
+    });
+  }
+
   if (commerce.intent === "complaint") {
     return decision({
       action: "reply",
-      reply: "Žao mi je zbog neprijatnosti. Rešićemo situaciju smireno i što brže. Pošaljite opis problema, fotografiju ako je imate i kontakt telefon.",
+      reply: "Žao mi je zbog toga. Pošaljite sliku problema i telefon, rešićemo reklamaciju.",
       confidence: commerce.confidence,
       reason: "complaint",
       matched: "complaint",
@@ -274,6 +310,24 @@ function decision(payload) {
     sendAllowed: payload.sendAllowed !== false,
     aiResponseId: payload.aiResponseId || null
   };
+}
+
+function hasImageAttachment(attachments = []) {
+  return attachments.some((attachment) => attachment.type === "image" || String(attachment.mimeType || "").startsWith("image/"));
+}
+
+function isPriceQuestion(text) {
+  return /\b(koliko|cena|cijena|kosta|košta|price)\b/i.test(normalizeText(text));
+}
+
+function formatProductPriceReply(product = {}) {
+  if (product.name && product.price) return `${product.name} košta ${humanPrice(product.price)}.`;
+  if (product.name) return `To je ${product.name}. Cenu možemo proveriti odmah.`;
+  return "Možete mi poslati naziv proizvoda ili još jednu jasniju sliku?";
+}
+
+function humanPrice(value) {
+  return String(value || "").replace(/(\d+)\.(\d{2})\s*BAM\b/i, "$1,$2 KM");
 }
 
 function interpolate(template, context) {

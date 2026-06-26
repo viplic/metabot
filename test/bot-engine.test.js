@@ -550,8 +550,98 @@ test("product knowledge auto replies stay concise and hide links", async () => {
   });
 
   assert.equal(result.reason, "knowledge");
-  assert.equal(result.reply, "Majica Alfa je 1990 RSD.");
+  assert.equal(result.reply, "Majica Alfa košta 1990 RSD.");
   assert.doesNotMatch(result.reply, /https?:\/\//);
+});
+
+test("vague price question without image does not guess a product from catalog", async () => {
+  const config = {
+    business: { defaultReply: "Default" },
+    automation: {
+      enabled: true,
+      handoffKeywords: [],
+      riskyKeywords: [],
+      rules: [],
+      faqs: [],
+      confidenceThreshold: 0.72,
+      collectFields: []
+    },
+    knowledge: {
+      enabled: true,
+      minScore: 0.2,
+      autoReplyThreshold: 0.75,
+      maxMatches: 4,
+      documents: [
+        {
+          id: "product-majica",
+          enabled: true,
+          title: "Majica Alfa",
+          keywords: ["Majica Alfa", "1990 RSD"],
+          content: "Proizvod: Majica Alfa\nCena: 1990 RSD",
+          response: ""
+        }
+      ]
+    },
+    orders: {},
+    ai: { enabled: false },
+    catalog: {},
+    handoff: { enabled: false }
+  };
+
+  const result = await routeIncomingMessage({
+    text: "Koliko je ovo?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(result.reason, "default_reply");
+  assert.equal(result.reply, "Default");
+});
+
+test("image product price questions use matched catalog image before knowledge fallback", async () => {
+  const config = {
+    business: { defaultReply: "Default" },
+    automation: {
+      enabled: true,
+      handoffKeywords: [],
+      riskyKeywords: [],
+      rules: [],
+      faqs: [],
+      confidenceThreshold: 0.72,
+      collectFields: []
+    },
+    knowledge: {
+      enabled: true,
+      minScore: 0.2,
+      autoReplyThreshold: 0.75,
+      maxMatches: 4,
+      documents: []
+    },
+    orders: { requiredFields: ["name", "phone", "street", "city", "postalCode", "product"] },
+    ai: { enabled: false },
+    catalog: {
+      products: [
+        {
+          name: "Pogled koji Pamtim",
+          price: "38.90 BAM",
+          image: "https://cdn.shop.test/products/pogled-koji-pamtim.jpg?v=1"
+        }
+      ]
+    },
+    handoff: { enabled: false }
+  };
+
+  const result = await routeIncomingMessage({
+    text: "Koliko je ovo?",
+    attachments: [{ type: "image", url: "https://cdn.shop.test/products/pogled-koji-pamtim.jpg?v=2" }],
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(result.reason, "image_product_price");
+  assert.equal(result.reply, "Pogled koji Pamtim košta 38,90 KM.");
 });
 
 test("normalizes Meta image attachments into incoming events", async () => {

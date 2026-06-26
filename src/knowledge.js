@@ -52,7 +52,7 @@ function conciseDocumentAnswer(document) {
   const product = content.match(/(?:^|\n)Proizvod:\s*([^\n]+)/i)?.[1]?.trim() || document.title || "";
   const price = content.match(/(?:^|\n)C(?:e|ij)na:\s*([^\n]+)/i)?.[1]?.trim() || "";
   if (String(document.id || "").startsWith("product-") || /^Proizvod:/i.test(content)) {
-    return price ? `${product} je ${price}.` : `Da, imamo ${product}.`;
+    return price ? `${product} košta ${humanPrice(price)}.` : `Da, imamo ${product}.`;
   }
 
   return content
@@ -62,6 +62,10 @@ function conciseDocumentAnswer(document) {
     .replace(/\s+/g, " ")
     .slice(0, 220)
     .trim();
+}
+
+function humanPrice(value) {
+  return String(value || "").replace(/(\d+)\.(\d{2})\s*BAM\b/i, "$1,$2 KM");
 }
 
 function scoreCandidate(queryTokens, candidate) {
@@ -108,6 +112,19 @@ function normalize(value) {
 
 const STOP_WORDS = new Set([
   "kako",
+  "koliko",
+  "kosta",
+  "košta",
+  "cena",
+  "cijena",
+  "cenu",
+  "cijenu",
+  "ovo",
+  "ovaj",
+  "ova",
+  "taj",
+  "tu",
+  "to",
   "koji",
   "koja",
   "koje",
