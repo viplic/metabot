@@ -5,11 +5,13 @@ const PRICE_PATTERN = /(?:RSD|rsd|din\.?|€|EUR|\$)\s?[\d.,]+|[\d.,]+\s?(?:RSD|
 
 export async function crawlTenantSite(sourceUrl, options = {}) {
   const url = normalizeUrl(sourceUrl);
+  const shopifySnapshot = await fetchShopifyCatalog(url);
   const maxPages = Number(options.maxPages || 8);
   const visited = new Set();
   const queue = [url];
   const pages = [];
-  const products = [];
+  const products = [...(shopifySnapshot.products || [])];
+  const hasStructuredProducts = products.length > 0;
   const policies = [];
   let rawText = "";
 
@@ -23,7 +25,7 @@ export async function crawlTenantSite(sourceUrl, options = {}) {
 
     pages.push(page);
     rawText += `\n\nURL: ${page.url}\n${page.text}`;
-    products.push(...extractProducts(page));
+    if (!hasStructuredProducts) products.push(...extractProducts(page));
     policies.push(...extractPolicies(page));
 
     for (const link of page.links) {
@@ -124,6 +126,55 @@ async function fetchPage(url) {
   } catch {
     return null;
   }
+}
+
+async function fetchShopifyCatalog(sourceUrl) {
+  const productsUrl = new URL("/products.json", sourceUrl);
+  productsUrl.searchParams.set("limit", "250");
+
+  try {
+    const response = await fetchWithTimeout(productsUrl, {
+      headers: {
+        "User-Agent": "MetaBotCrawler/1.0 (+https://metabot.local)",
+        "Accept": "application/json"
+      }
+    }, 10000);
+    if (!response.ok) return { products: [] };
+    const data = await response.json();
+    const products = (data.products || [])
+      .map((product) => shopifyProductToCatalog(product, sourceUrl))
+      .filter((product) => product.name && product.price !== "0.00 BAM" && !looksLikeShopifyOptionProduct(product.name));
+    return { products };
+  } catch {
+    return { products: [] };
+  }
+}
+
+function shopifyProductToCatalog(product, sourceUrl) {
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  const pricedVariants = variants.filter((variant) => Number(variant.price || 0) > 0);
+  const prices = [...new Set(pricedVariants.map((variant) => `${variant.price} BAM`))];
+  const variantNames = pricedVariants
+    .map((variant) => cleanText(variant.title || ""))
+    .filter((title) => title && title.toLowerCase() !== "default title");
+  const handle = product.handle || "";
+  const url = handle ? new URL(`/products/${handle}`, sourceUrl).toString() : sourceUrl;
+  const description = cleanText(String(product.body_html || "").replace(/<[^>]+>/g, " "));
+
+  return {
+    name: cleanText(product.title || ""),
+    price: prices.length <= 1 ? prices[0] || "" : prices.join(" / "),
+    description: [
+      description,
+      variantNames.length ? `Varijante: ${[...new Set(variantNames)].join(", ")}` : ""
+    ].filter(Boolean).join("\n"),
+    url,
+    image: product.images?.[0]?.src || product.image?.src || ""
+  };
+}
+
+function looksLikeShopifyOptionProduct(name) {
+  return /^(izaberite|tekst$|text$|upload|dodaj|odaberite)\b/i.test(cleanText(name));
 }
 
 function extractProducts(page) {
