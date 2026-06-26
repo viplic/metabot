@@ -644,6 +644,51 @@ test("image product price questions use matched catalog image before knowledge f
   assert.equal(result.reply, "Pogled koji Pamtim košta 38,90 KM.");
 });
 
+test("product links are sent only when customer explicitly asks for a link", async () => {
+  const config = {
+    business: { defaultReply: "Default" },
+    automation: {
+      enabled: true,
+      handoffKeywords: [],
+      riskyKeywords: [],
+      rules: [],
+      faqs: [],
+      confidenceThreshold: 0.72,
+      collectFields: []
+    },
+    knowledge: { enabled: true, minScore: 0.2, autoReplyThreshold: 0.75, maxMatches: 4, documents: [] },
+    orders: {},
+    ai: { enabled: false },
+    catalog: {
+      products: [
+        {
+          name: "Pogled koji Pamtim",
+          price: "38.90 BAM",
+          url: "https://shop.test/pogled-koji-pamtim"
+        }
+      ]
+    },
+    handoff: { enabled: false }
+  };
+
+  const withoutLinkRequest = await routeIncomingMessage({
+    text: "Koliko kosta Pogled koji Pamtim?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.doesNotMatch(withoutLinkRequest.reply, /https?:\/\//);
+
+  const withLinkRequest = await routeIncomingMessage({
+    text: "Posalji mi link za Pogled koji Pamtim",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.equal(withLinkRequest.reason, "product_link");
+  assert.match(withLinkRequest.reply, /https:\/\/shop\.test\/pogled-koji-pamtim/);
+});
+
 test("normalizes Meta image attachments into incoming events", async () => {
   const { normalizeMetaPayload } = await import("../src/meta-client.js");
   const events = normalizeMetaPayload({
