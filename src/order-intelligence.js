@@ -19,7 +19,7 @@ const ORDER_KEYWORDS = [
   "šaljem podatke"
 ];
 const DELIVERY_KEYWORDS = ["dostava", "dostave", "dostavu", "postarina", "poštarina", "shipping", "kurir"];
-const LATE_KEYWORDS = ["nije stigla", "nije stiglo", "kasni", "posiljka", "pošiljka", "tracking", "gde je", "porudzbina", "porudžbina"];
+const LATE_KEYWORDS = ["nije stigla", "nije stiglo", "kasni", "kasnjenje", "posiljka", "pošiljka", "tracking", "gde je", "gdje je", "status porudzbine", "status porudžbine"];
 const EXCHANGE_KEYWORDS = ["zamena", "zamenim", "velicina", "veličina", "drugi model", "druga boja"];
 const COMPLAINT_KEYWORDS = ["reklamacija", "osteceno", "oštećeno", "ne radi", "problem", "nezadovoljan", "nezadovoljna", "povrat", "refund"];
 const PRODUCTION_KEYWORDS = ["koliko dana", "rok", "izrada", "kada saljete", "kada šaljete", "kad stize", "kad stiže"];
