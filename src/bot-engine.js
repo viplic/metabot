@@ -97,19 +97,6 @@ export async function routeIncomingMessage({
     });
   }
 
-  const linkProduct = findProductForLinkRequest(cleanText, config.catalog || {});
-  if (linkProduct) {
-    return decision({
-      action: "reply",
-      reply: `${linkProduct.name}: ${linkProduct.url}`,
-      confidence: 0.92,
-      reason: "product_link",
-      matched: linkProduct.name,
-      profileUpdates,
-      commerce
-    });
-  }
-
   if (commerce.extracted?.product?.name && hasImageAttachment(attachments) && isPriceQuestion(cleanText)) {
     return decision({
       action: "reply",
@@ -341,12 +328,6 @@ function formatProductPriceReply(product = {}) {
 
 function humanPrice(value) {
   return String(value || "").replace(/(\d+)\.(\d{2})\s*BAM\b/i, "$1,$2 KM");
-}
-
-function findProductForLinkRequest(text, catalog = {}) {
-  const lower = normalizeText(text);
-  if (!/\b(link|url|sajt|stranic|posalji|pošalji)\b/.test(lower)) return null;
-  return (catalog.products || []).find((product) => product.name && product.url && lower.includes(normalizeText(product.name))) || null;
 }
 
 function interpolate(template, context) {

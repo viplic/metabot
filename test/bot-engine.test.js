@@ -644,7 +644,7 @@ test("image product price questions use matched catalog image before knowledge f
   assert.equal(result.reply, "Pogled koji Pamtim košta 38,90 KM.");
 });
 
-test("product links are sent only when customer explicitly asks for a link", async () => {
+test("product links are not sent even when customer asks for a link", async () => {
   const config = {
     business: { defaultReply: "Default" },
     automation: {
@@ -685,8 +685,7 @@ test("product links are sent only when customer explicitly asks for a link", asy
     conversation: { profile: {}, messages: [], audit: [] },
     channelType: "messenger"
   });
-  assert.equal(withLinkRequest.reason, "product_link");
-  assert.match(withLinkRequest.reply, /https:\/\/shop\.test\/pogled-koji-pamtim/);
+  assert.doesNotMatch(withLinkRequest.reply, /https?:\/\//);
 });
 
 test("normalizes Meta image attachments into incoming events", async () => {
