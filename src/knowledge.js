@@ -42,9 +42,26 @@ function documentCandidates(documents) {
       type: "document",
       title: document.title,
       keywords: document.keywords || [],
-      answer: document.response || document.content,
+      answer: document.response || conciseDocumentAnswer(document),
       content: document.content
     }));
+}
+
+function conciseDocumentAnswer(document) {
+  const content = String(document.content || "");
+  const product = content.match(/(?:^|\n)Proizvod:\s*([^\n]+)/i)?.[1]?.trim() || document.title || "";
+  const price = content.match(/(?:^|\n)C(?:e|ij)na:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  if (String(document.id || "").startsWith("product-") || /^Proizvod:/i.test(content)) {
+    return price ? `${product} je ${price}.` : `Da, imamo ${product}.`;
+  }
+
+  return content
+    .split(/\n+/)
+    .filter((line) => !/^\s*(URL|Slika):/i.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .slice(0, 220)
+    .trim();
 }
 
 function scoreCandidate(queryTokens, candidate) {

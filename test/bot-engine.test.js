@@ -508,6 +508,52 @@ test("knowledge retrieval can answer before AI fallback", async () => {
   assert.match(result.reply, /brisanje podataka/i);
 });
 
+test("product knowledge auto replies stay concise and hide links", async () => {
+  const config = {
+    business: { defaultReply: "Default" },
+    automation: {
+      enabled: true,
+      handoffKeywords: [],
+      riskyKeywords: [],
+      rules: [],
+      faqs: [],
+      confidenceThreshold: 0.72,
+      collectFields: []
+    },
+    knowledge: {
+      enabled: true,
+      minScore: 0.2,
+      autoReplyThreshold: 0.75,
+      maxMatches: 4,
+      documents: [
+        {
+          id: "product-majica",
+          enabled: true,
+          title: "Majica Alfa",
+          keywords: ["Majica Alfa", "1990 RSD"],
+          content: "Proizvod: Majica Alfa\nCena: 1990 RSD\nOpis: Pamucna majica\nURL: https://shop.test/majica\nSlika: https://shop.test/majica.jpg",
+          response: ""
+        }
+      ]
+    },
+    orders: {},
+    ai: { enabled: false },
+    catalog: {},
+    handoff: { enabled: false }
+  };
+
+  const result = await routeIncomingMessage({
+    text: "Koliko kosta Majica Alfa?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(result.reason, "knowledge");
+  assert.equal(result.reply, "Majica Alfa je 1990 RSD.");
+  assert.doesNotMatch(result.reply, /https?:\/\//);
+});
+
 test("normalizes Meta image attachments into incoming events", async () => {
   const { normalizeMetaPayload } = await import("../src/meta-client.js");
   const events = normalizeMetaPayload({
