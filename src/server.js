@@ -1252,6 +1252,8 @@ function isPublicAsset(pathname) {
     pathname === "/landing.js" ||
     pathname === "/client.html" ||
     pathname === "/client-app.js" ||
+    pathname === "/privacy.html" ||
+    pathname === "/delete-data.html" ||
     pathname === "/styles.css" ||
     pathname.startsWith("/assets/");
 }
