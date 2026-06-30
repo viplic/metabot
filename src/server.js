@@ -584,6 +584,11 @@ async function handleTenantApi(request, response, url, route) {
     return sendJson(response, 200, await checkTenantMetaHealth(tenantId));
   }
 
+  if (request.method === "POST" && route.resource === "meta-connect") {
+    const body = await readJsonBody(request);
+    return sendJson(response, 200, await connectTenantMetaPage(tenantId, body));
+  }
+
   if (request.method === "POST" && route.resource === "access") {
     return sendJson(response, 200, await resetTenantPortalPassword(tenantId));
   }
@@ -747,6 +752,116 @@ async function checkTenantMetaHealth(tenantId) {
     checkedAt: new Date().toISOString(),
     channels
   };
+}
+
+async function connectTenantMetaPage(tenantId, body = {}) {
+  const config = await loadTenantConfig(tenantId);
+  const version = config.meta?.graphApiVersion || "v25.0";
+  const appId = String(config.meta?.appId || body.appId || "").trim();
+  const appSecret = getAppSecret(config);
+  const userAccessToken = String(body.userAccessToken || "").trim();
+  const preferredPageId = String(body.pageId || "").trim();
+
+  if (!appId) return badRequest("meta_app_id_required", "Unesi Meta App ID u Meta API podesavanjima i sacuvaj.");
+  if (!appSecret) return badRequest("meta_app_secret_required", "Unesi App secret u Meta API podesavanjima i sacuvaj.");
+  if (!userAccessToken) return badRequest("meta_user_token_required", "Nalepi User Access Token za reconnect.");
+
+  const longLivedUserToken = await exchangeForLongLivedUserToken({ version, appId, appSecret, userAccessToken });
+  const pages = await fetchManagedPages({ version, accessToken: longLivedUserToken });
+  if (!pages.length) return badRequest("no_managed_pages", "Meta nije vratila nijednu Facebook stranicu za ovaj token.");
+
+  const configuredPageIds = new Set((config.channels || []).map((channel) => String(channel.pageId || "")).filter(Boolean));
+  const selectedPage = pages.find((page) => preferredPageId && String(page.id) === preferredPageId) ||
+    pages.find((page) => configuredPageIds.has(String(page.id))) ||
+    pages[0];
+
+  if (!selectedPage?.access_token) {
+    return badRequest("page_token_not_returned", "Meta nije vratila Page access token za izabranu stranicu.");
+  }
+
+  const instagramId = selectedPage.instagram_business_account?.id || "";
+  const updated = structuredClone(config);
+  updated.meta ||= {};
+  updated.meta.pageAccessTokenEncrypted = encryptSecret(selectedPage.access_token);
+  updated.meta.pageAccessTokenEnv = updated.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+  updated.channels = (updated.channels || []).map((channel) => {
+    const next = { ...channel };
+    const isMessengerMatch = next.type === "messenger" && (!next.pageId || String(next.pageId) === String(selectedPage.id));
+    const isInstagramMatch = next.type === "instagram" && (!next.igAccountId || (instagramId && String(next.igAccountId) === String(instagramId)));
+    if (isMessengerMatch || isInstagramMatch) {
+      next.pageId = next.pageId || String(selectedPage.id);
+      if (next.type === "instagram" && instagramId) next.igAccountId = String(instagramId);
+      next.pageAccessTokenEncrypted = encryptSecret(selectedPage.access_token);
+      next.pageAccessTokenEnv = next.pageAccessTokenEnv || updated.meta.pageAccessTokenEnv || "META_PAGE_ACCESS_TOKEN";
+      next.enabled = true;
+      next.sendEnabled = true;
+    }
+    return next;
+  });
+
+  const saved = await saveTenantConfig(tenantId, updated);
+  let learning = { skipped: true };
+  if (saved.knowledge?.learning?.fromOldChatsEnabled) {
+    try {
+      learning = await generateLearningSuggestionsFromConversations(
+        tenantId,
+        saved.knowledge.learning.maxOldChats || 30
+      );
+    } catch (error) {
+      learning = { skipped: true, error: error.message };
+    }
+  }
+
+  return {
+    ok: true,
+    page: {
+      id: selectedPage.id,
+      name: selectedPage.name || ""
+    },
+    instagramBusinessAccount: instagramId ? { id: instagramId } : null,
+    learning,
+    config: publicConfig(saved)
+  };
+}
+
+async function exchangeForLongLivedUserToken({ version, appId, appSecret, userAccessToken }) {
+  const url = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
+  url.searchParams.set("grant_type", "fb_exchange_token");
+  url.searchParams.set("client_id", appId);
+  url.searchParams.set("client_secret", appSecret);
+  url.searchParams.set("fb_exchange_token", userAccessToken);
+  const response = await fetchWithTimeout(url, {}, 10000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body.access_token) {
+    throw metaConnectError("long_lived_token_failed", body?.error?.message || `Meta returned ${response.status}`);
+  }
+  return body.access_token;
+}
+
+async function fetchManagedPages({ version, accessToken }) {
+  const url = new URL(`https://graph.facebook.com/${version}/me/accounts`);
+  url.searchParams.set("fields", "id,name,access_token,instagram_business_account");
+  url.searchParams.set("access_token", accessToken);
+  const response = await fetchWithTimeout(url, {}, 10000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw metaConnectError("managed_pages_failed", body?.error?.message || `Meta returned ${response.status}`);
+  }
+  return Array.isArray(body.data) ? body.data : [];
+}
+
+function badRequest(code, message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.code = code;
+  throw error;
+}
+
+function metaConnectError(code, message) {
+  const error = new Error(message);
+  error.statusCode = 502;
+  error.code = code;
+  return error;
 }
 
 async function maybeOpenTicket(config, conversation, incoming, result) {
@@ -929,7 +1044,7 @@ function extractLearningKeywords(question) {
   return [...new Set([question.slice(0, 80), ...words].filter(Boolean))];
 }
 
-async function generateLearningSuggestionsFromConversations(tenantId, limit = 25) {
+async function generateLearningSuggestionsFromConversations(tenantId, limit = 30) {
   const config = await loadTenantConfig(tenantId);
   if (!config.knowledge?.learning?.fromOldChatsEnabled) {
     const error = new Error("Learning from old chats is disabled for this tenant.");
@@ -939,7 +1054,7 @@ async function generateLearningSuggestionsFromConversations(tenantId, limit = 25
   }
   const conversations = pruneExpiredConversations(await loadConversations(tenantId), config.privacy.retentionDays);
   let created = 0;
-  const maxOldChats = Number(limit || config.knowledge.learning.maxOldChats || 25);
+  const maxOldChats = Number(limit || config.knowledge.learning.maxOldChats || 30);
 
   for (const conversation of conversations.slice(0, maxOldChats)) {
     const messages = conversation.messages || [];
@@ -1218,7 +1333,7 @@ function tenantIdFromWebhookPath(pathname) {
 }
 
 function matchTenantApiRoute(pathname) {
-  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health)$/);
+  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|meta-connect)$/);
   if (!match) return null;
   return {
     tenantId: normalizeTenantId(match[1]),

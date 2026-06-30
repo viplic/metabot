@@ -69,15 +69,18 @@ export function buildCommerceSystemGuidance({ config, catalog }) {
 export function formatMissingOrderPrompt(missingFields) {
   const labels = {
     name: "ime i prezime",
-    phone: "broj telefona",
-    street: "ulicu i broj",
     city: "grad",
-    postalCode: "postanski broj",
+    postalCode: "poštanski broj",
+    street: "adresu i broj",
+    phone: "broj telefona",
     product: "proizvod koji zelite"
   };
-  const missing = missingFields.map((field) => labels[field] || field);
+  const preferredOrder = ["name", "city", "postalCode", "street", "phone", "product"];
+  const orderedFields = preferredOrder.filter((field) => missingFields.includes(field))
+    .concat(missingFields.filter((field) => !preferredOrder.includes(field)));
+  const missing = orderedFields.map((field) => labels[field] || field);
   if (!missing.length) return "";
-  return `Može, samo mi pošaljite još ${joinHuman(missing)}.`;
+  return `Može. Za porudžbinu pošaljite ${joinHuman(missing)}.`;
 }
 
 function detectIntent(lower, extracted = {}) {
@@ -184,7 +187,7 @@ function findProductFromAttachments(attachments = [], catalog = {}) {
 }
 
 function missingOrderFields(extracted, config) {
-  const required = config.orders?.requiredFields || ["name", "phone", "street", "city", "postalCode", "product"];
+  const required = config.orders?.requiredFields || ["name", "city", "postalCode", "street", "phone", "product"];
   const checks = {
     name: extracted.customer?.name,
     phone: extracted.customer?.phone,

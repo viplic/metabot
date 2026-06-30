@@ -315,6 +315,9 @@ export function normalizeTenantId(value) {
 
 export function normalizeConfig(config) {
   const normalized = structuredClone(config);
+  normalized.meta ||= {};
+  normalized.meta.graphApiVersion ||= "v25.0";
+  normalized.meta.appId = String(normalized.meta.appId || "").trim();
   normalized.channels = ensureArray(normalized.channels).map((channel, index) => ({
     id: channel.id || `${channel.type || "channel"}-${index + 1}`,
     type: channel.type || "messenger",
@@ -388,7 +391,7 @@ export function normalizeConfig(config) {
     enabled: normalized.orders?.enabled !== false,
     requiredFields: ensureArray(normalized.orders?.requiredFields).length
       ? ensureArray(normalized.orders.requiredFields)
-      : ["name", "phone", "street", "city", "postalCode", "product"],
+      : ["name", "city", "postalCode", "street", "phone", "product"],
     optionalFields: ensureArray(normalized.orders?.optionalFields).length
       ? ensureArray(normalized.orders.optionalFields)
       : ["color", "model", "quantity", "note"],
@@ -414,7 +417,7 @@ export function normalizeConfig(config) {
   normalized.knowledge.learning ||= {};
   normalized.knowledge.learning.fromOldChatsEnabled = Boolean(normalized.knowledge.learning.fromOldChatsEnabled);
   normalized.knowledge.learning.suggestFromNewChats = normalized.knowledge.learning.suggestFromNewChats !== false;
-  normalized.knowledge.learning.maxOldChats = Math.max(1, Math.min(200, Number(normalized.knowledge.learning.maxOldChats || 25)));
+  normalized.knowledge.learning.maxOldChats = Math.max(1, Math.min(200, Number(normalized.knowledge.learning.maxOldChats || 30)));
   normalized.knowledge.learning.autoApprove = Boolean(normalized.knowledge.learning.autoApprove);
   normalized.knowledge.documents = ensureArray(normalized.knowledge.documents).map((document, index) => ({
     id: document.id || `knowledge-${Date.now()}-${index}`,

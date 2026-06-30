@@ -10,6 +10,7 @@
   },
   "meta": {
     "graphApiVersion": "v25.0",
+    "appId": "",
     "verifyToken": "change-this-token",
     "requireSignature": true,
     "appSecretEnv": "META_APP_SECRET",
@@ -135,7 +136,7 @@
   },
   "orders": {
     "enabled": true,
-    "requiredFields": ["name", "phone", "street", "city", "postalCode", "product"],
+    "requiredFields": ["name", "city", "postalCode", "street", "phone", "product"],
     "optionalFields": ["color", "model", "quantity", "note"],
     "captureComplaints": true
   },
@@ -158,7 +159,7 @@
     "learning": {
       "fromOldChatsEnabled": false,
       "suggestFromNewChats": true,
-      "maxOldChats": 25,
+      "maxOldChats": 30,
       "autoApprove": false
     },
     "documents": [

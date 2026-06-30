@@ -627,11 +627,33 @@ function renderConnection() {
   panels.channels.insertAdjacentHTML(
     "beforeend",
     section(
+      "Stabilno povezivanje",
+      `<p class="muted">Kada Meta token istekne ili se promeni nalog, ovde nalepi User Access Token. NibaChat ce iz njega izvuci Page token za izabranu stranicu i sacuvati ga sifrovano za ovog klijenta.</p>
+      <div class="grid">
+        <div class="field">
+          <label for="metaConnectUserToken">User Access Token za reconnect</label>
+          <input id="metaConnectUserToken" type="password" autocomplete="off" spellcheck="false" placeholder="Nalepi privremeni Meta user token" />
+          <small>Ne cuva se kao user token; koristi se samo da se obnovi Page token.</small>
+        </div>
+        <div class="field">
+          <label for="metaConnectPageId">Page ID</label>
+          <input id="metaConnectPageId" value="${escapeAttr(config.channels.find((channel) => channel.pageId)?.pageId || "")}" />
+          <small>Ako ostane prazno, aplikacija bira prvu stranicu iz tokena.</small>
+        </div>
+      </div>
+      <div class="actions"><button id="connectMetaPage" class="primary">Obnovi Page token</button></div>
+      <div id="metaConnectResult" class="test-result"><span>Koristi ovo kada token prestane da salje poruke.</span></div>`
+    )
+  );
+  panels.channels.insertAdjacentHTML(
+    "beforeend",
+    section(
       "Provera povezivanja",
       `<div class="actions"><button id="checkMetaHealth" class="primary">Proveri Meta tokene</button></div>
       <div id="metaHealthResult" class="test-result"><span>Pokreni proveru pre testiranja poruka.</span></div>`
     )
   );
+  panels.channels.querySelector("#connectMetaPage").addEventListener("click", connectMetaPage);
   panels.channels.querySelector("#checkMetaHealth").addEventListener("click", checkMetaHealth);
 }
 
@@ -641,6 +663,7 @@ function renderChannels({ append = false } = {}) {
     "Meta API",
     `<div class="grid">
       ${textField("Graph API verzija", config.meta.graphApiVersion, (value) => (config.meta.graphApiVersion = value))}
+      ${textField("Meta App ID", config.meta.appId, (value) => (config.meta.appId = value))}
       ${textField("Verify token", config.meta.verifyToken, (value) => (config.meta.verifyToken = value))}
       ${checkboxField("Signature provera", config.meta.requireSignature, (value) => (config.meta.requireSignature = value))}
       ${secretField("App secret", config.meta.appSecretValue, Boolean(config.meta.hasAppSecret), (value) => (config.meta.appSecretValue = value))}
@@ -962,6 +985,41 @@ async function checkMetaHealth() {
     }).join("");
   } catch (error) {
     resultEl.innerHTML = `<span class="danger-text">${escapeHtml(error.message || "Provera nije uspela")}</span>`;
+  }
+}
+
+async function connectMetaPage() {
+  const resultEl = panels.channels.querySelector("#metaConnectResult");
+  const userAccessToken = panels.channels.querySelector("#metaConnectUserToken")?.value?.trim() || "";
+  const pageId = panels.channels.querySelector("#metaConnectPageId")?.value?.trim() || "";
+  if (!userAccessToken) {
+    resultEl.innerHTML = `<span class="danger-text">Nalepi User Access Token pre obnove.</span>`;
+    return;
+  }
+
+  resultEl.innerHTML = "<span>Povezujem Meta stranicu...</span>";
+  try {
+    if (dirty) {
+      resultEl.innerHTML = "<span>Prvo cuvam podesavanja...</span>";
+      await save();
+    }
+    const activeResultEl = panels.channels.querySelector("#metaConnectResult");
+    activeResultEl.innerHTML = "<span>Povezujem Meta stranicu...</span>";
+    const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/meta-connect`, {
+      method: "POST",
+      body: JSON.stringify({ userAccessToken, pageId, appId: config.meta.appId })
+    });
+    config = normalizeClientConfig(result.config);
+    tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
+    learningMemories = tenantStore.memories || [];
+    setSaved("Page token obnovljen", true);
+    const learningText = result.learning?.created ? ` Ucenje: ${result.learning.created} predloga.` : "";
+    renderConnection();
+    renderSidebar();
+    panels.channels.querySelector("#metaConnectResult").innerHTML =
+      `<span class="success-text">Povezano: ${escapeHtml(result.page?.name || result.page?.id || "Meta stranica")}.${learningText}</span>`;
+  } catch (error) {
+    resultEl.innerHTML = `<span class="danger-text">${escapeHtml(error.message || "Povezivanje nije uspelo")}</span>`;
   }
 }
 
@@ -1368,6 +1426,7 @@ function normalizeClientConfig(value) {
   const normalized = structuredClone(value || {});
   normalized.business ||= {};
   normalized.meta ||= {};
+  normalized.meta.appId ||= "";
   normalized.meta.appSecretValue ||= "";
   normalized.meta.pageAccessTokenValue ||= "";
   normalized.channels ||= [];
@@ -1385,7 +1444,7 @@ function normalizeClientConfig(value) {
   normalized.knowledge.learning ||= {};
   normalized.knowledge.learning.fromOldChatsEnabled ??= false;
   normalized.knowledge.learning.suggestFromNewChats ??= true;
-  normalized.knowledge.learning.maxOldChats ||= 25;
+  normalized.knowledge.learning.maxOldChats ||= 30;
   normalized.knowledge.learning.autoApprove ??= false;
   normalized.knowledge.documents ||= [];
   normalized.ai ||= {};
