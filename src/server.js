@@ -759,7 +759,7 @@ async function connectTenantMetaPage(tenantId, body = {}) {
   const version = config.meta?.graphApiVersion || "v25.0";
   const appId = String(config.meta?.appId || body.appId || "").trim();
   const appSecret = getAppSecret(config);
-  const userAccessToken = String(body.userAccessToken || "").trim();
+  const userAccessToken = cleanMetaAccessToken(body.userAccessToken);
   const preferredPageId = String(body.pageId || "").trim();
 
   if (!appId) return badRequest("meta_app_id_required", "Unesi Meta App ID u Meta API podesavanjima i sacuvaj.");
@@ -864,6 +864,18 @@ async function fetchManagedPages({ version, accessToken }) {
     throw metaConnectError("managed_pages_failed", body?.error?.message || `Meta returned ${response.status}`);
   }
   return Array.isArray(body.data) ? body.data : [];
+}
+
+function cleanMetaAccessToken(value) {
+  let token = String(value || "").trim();
+  const queryMatch = token.match(/[?&#]access_token=([^&#\s]+)/i) || token.match(/^access_token=([^&#\s]+)/i);
+  if (queryMatch) token = decodeURIComponent(queryMatch[1]);
+  token = token
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, "");
+  const tokenMatch = token.match(/EAA[A-Za-z0-9_-]+/);
+  return tokenMatch ? tokenMatch[0] : token;
 }
 
 function badRequest(code, message) {

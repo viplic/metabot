@@ -1420,7 +1420,14 @@ async function fetchJson(url, options = {}) {
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`${url} ${response.status}${body ? `: ${body.slice(0, 240)}` : ""}`);
+    let message = "";
+    try {
+      const parsed = JSON.parse(body);
+      message = parsed.message || parsed.error || "";
+    } catch {
+      message = body.slice(0, 240);
+    }
+    throw new Error(message || `${url} ${response.status}`);
   }
   return response.json();
 }
