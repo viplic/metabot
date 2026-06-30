@@ -627,8 +627,8 @@ function renderConnection() {
   panels.channels.insertAdjacentHTML(
     "beforeend",
     section(
-      "Stabilno povezivanje",
-      `<p class="muted">Kada Meta token istekne ili se promeni nalog, ovde nalepi User Access Token. NibaChat ce iz njega izvuci Page token za izabranu stranicu i sacuvati ga sifrovano za ovog klijenta.</p>
+    "Stabilno povezivanje",
+      `<p class="muted">Facebook i Instagram povezuj preko dugmeta ispod. Rucni token koristi samo ako Meta ponisti dozvole.</p>
       <div class="grid">
         <div class="field">
           <label for="metaConnectUserToken">User Access Token za reconnect</label>
