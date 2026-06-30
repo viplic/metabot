@@ -1,4 +1,5 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -116,6 +117,10 @@ export async function handleRequest(request, response) {
 
     if (url.pathname.startsWith("/auth/")) {
       return await handleAuthApi(request, response, url);
+    }
+
+    if (url.pathname === "/meta-oauth/callback") {
+      return await handleMetaOAuthCallback(request, response, url);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -584,6 +589,10 @@ async function handleTenantApi(request, response, url, route) {
     return sendJson(response, 200, await checkTenantMetaHealth(tenantId));
   }
 
+  if (request.method === "GET" && route.resource === "meta-oauth-start") {
+    return sendJson(response, 200, await startTenantMetaOAuth(tenantId, request));
+  }
+
   if (request.method === "POST" && route.resource === "meta-connect") {
     const body = await readJsonBody(request);
     return sendJson(response, 200, await connectTenantMetaPage(tenantId, body));
@@ -754,6 +763,95 @@ async function checkTenantMetaHealth(tenantId) {
   };
 }
 
+async function startTenantMetaOAuth(tenantId, request) {
+  const config = await loadTenantConfig(tenantId);
+  const appId = String(config.meta?.appId || "").trim();
+  if (!appId) return badRequest("meta_app_id_required", "Unesi Meta App ID i sacuvaj pre povezivanja preko Facebook login-a.");
+
+  const redirectUri = metaOAuthRedirectUri(request);
+  const state = signMetaOAuthState({ tenantId, redirectUri, createdAt: Date.now() });
+  const version = config.meta?.graphApiVersion || "v25.0";
+  const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
+  authUrl.searchParams.set("client_id", appId);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("auth_type", "rerequest");
+  authUrl.searchParams.set("scope", [
+    "pages_show_list",
+    "pages_read_engagement",
+    "pages_manage_metadata",
+    "pages_messaging",
+    "instagram_basic",
+    "instagram_manage_messages"
+  ].join(","));
+
+  return {
+    authUrl: authUrl.toString(),
+    redirectUri,
+    scopes: authUrl.searchParams.get("scope").split(",")
+  };
+}
+
+async function handleMetaOAuthCallback(request, response, url) {
+  const code = url.searchParams.get("code") || "";
+  const rawState = url.searchParams.get("state") || "";
+  const error = url.searchParams.get("error_message") || url.searchParams.get("error_description") || "";
+
+  try {
+    if (error) throw metaConnectError("meta_oauth_denied", error);
+    if (!code || !rawState) throw metaConnectError("meta_oauth_missing_code", "Facebook nije vratio code/state za povezivanje.");
+
+    const state = verifyMetaOAuthState(rawState);
+    const config = await loadTenantConfig(state.tenantId);
+    const appId = String(config.meta?.appId || "").trim();
+    const appSecret = getAppSecret(config);
+    if (!appId) throw metaConnectError("meta_app_id_required", "Meta App ID nije sacuvan za ovog klijenta.");
+    if (!appSecret) throw metaConnectError("meta_app_secret_required", "App secret nije sacuvan za ovog klijenta.");
+
+    const token = await exchangeMetaOAuthCode({
+      version: config.meta?.graphApiVersion || "v25.0",
+      appId,
+      appSecret,
+      code,
+      redirectUri: state.redirectUri
+    });
+    const result = await connectTenantMetaPage(state.tenantId, {
+      userAccessToken: token,
+      appId,
+      pageId: ""
+    });
+
+    return sendHtml(response, 200, metaOAuthResultHtml({
+      ok: true,
+      title: "Meta povezivanje je uspelo",
+      message: `Povezana stranica: ${result.page?.name || result.page?.id || "Meta stranica"}. Mozes zatvoriti ovaj prozor i kliknuti Proveri Meta tokene.`,
+      tenantId: state.tenantId
+    }));
+  } catch (callbackError) {
+    return sendHtml(response, callbackError.statusCode || 500, metaOAuthResultHtml({
+      ok: false,
+      title: "Meta povezivanje nije uspelo",
+      message: callbackError.message || "Pokusaj ponovo.",
+      tenantId: ""
+    }));
+  }
+}
+
+async function exchangeMetaOAuthCode({ version, appId, appSecret, code, redirectUri }) {
+  const tokenUrl = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
+  tokenUrl.searchParams.set("client_id", appId);
+  tokenUrl.searchParams.set("client_secret", appSecret);
+  tokenUrl.searchParams.set("redirect_uri", redirectUri);
+  tokenUrl.searchParams.set("code", code);
+  const tokenResponse = await fetchWithTimeout(tokenUrl, {}, 10000);
+  const tokenBody = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenBody.access_token) {
+    throw metaConnectError("meta_oauth_code_exchange_failed", tokenBody?.error?.message || `Meta returned ${tokenResponse.status}`);
+  }
+  return tokenBody.access_token;
+}
+
 async function connectTenantMetaPage(tenantId, body = {}) {
   const config = await loadTenantConfig(tenantId);
   const version = config.meta?.graphApiVersion || "v25.0";
@@ -890,6 +988,83 @@ function metaConnectError(code, message) {
   error.statusCode = 502;
   error.code = code;
   return error;
+}
+
+function metaOAuthRedirectUri(request) {
+  const host = request.headers["x-forwarded-host"] || request.headers.host;
+  const proto = request.headers["x-forwarded-proto"] || (isLocalHost(host) ? "http" : "https");
+  return `${proto}://${host}/meta-oauth/callback`;
+}
+
+function signMetaOAuthState(payload) {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", metaOAuthStateSecret()).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function verifyMetaOAuthState(value) {
+  const [encoded, signature] = String(value || "").split(".");
+  if (!encoded || !signature) throw metaConnectError("meta_oauth_bad_state", "Facebook state nije validan.");
+  const expected = crypto.createHmac("sha256", metaOAuthStateSecret()).update(encoded).digest("base64url");
+  if (!safeStringEqual(signature, expected)) throw metaConnectError("meta_oauth_bad_state", "Facebook state potpis nije validan.");
+  const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+  if (!payload.tenantId || !payload.redirectUri) throw metaConnectError("meta_oauth_bad_state", "Facebook state nema potrebne podatke.");
+  if (Date.now() - Number(payload.createdAt || 0) > 15 * 60 * 1000) {
+    throw metaConnectError("meta_oauth_expired_state", "Facebook povezivanje je isteklo. Pokreni ga ponovo.");
+  }
+  return {
+    tenantId: normalizeTenantId(payload.tenantId),
+    redirectUri: String(payload.redirectUri)
+  };
+}
+
+function metaOAuthStateSecret() {
+  return getAdminToken() || process.env.SECRET_KEY || "metabot-local-oauth-state";
+}
+
+function sendHtml(response, status, html) {
+  response.writeHead(status, securityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
+  response.end(html);
+}
+
+function metaOAuthResultHtml({ ok, title, message, tenantId }) {
+  const color = ok ? "#10b981" : "#ef4444";
+  const safeTitle = escapeHtmlText(title);
+  const safeMessage = escapeHtmlText(message);
+  const backUrl = tenantId ? `/admin.html?tenant=${encodeURIComponent(tenantId)}` : "/admin.html";
+  return `<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#f8fafc;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:680px;margin:24px;padding:32px;border:1px solid rgba(148,163,184,.28);border-radius:16px;background:#0d1728;box-shadow:0 24px 80px rgba(0,0,0,.3)}
+    .dot{width:56px;height:56px;border-radius:50%;background:${color};box-shadow:0 0 36px ${color}66}
+    h1{font-size:28px;margin:20px 0 12px}
+    p{color:#cbd5e1;font-size:17px;line-height:1.55}
+    a{display:inline-block;margin-top:18px;color:#fff;text-decoration:none;background:#10b981;padding:12px 18px;border-radius:10px;font-weight:700}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="dot"></div>
+    <h1>${safeTitle}</h1>
+    <p>${safeMessage}</p>
+    <a href="${backUrl}">Vrati se u NibaChat</a>
+  </main>
+</body>
+</html>`;
+}
+
+function escapeHtmlText(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function maybeOpenTicket(config, conversation, incoming, result) {
@@ -1361,7 +1536,7 @@ function tenantIdFromWebhookPath(pathname) {
 }
 
 function matchTenantApiRoute(pathname) {
-  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|meta-connect)$/);
+  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|meta-connect|meta-oauth-start)$/);
   if (!match) return null;
   return {
     tenantId: normalizeTenantId(match[1]),

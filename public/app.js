@@ -641,7 +641,10 @@ function renderConnection() {
           <small>Ako ostane prazno, aplikacija bira prvu stranicu iz tokena.</small>
         </div>
       </div>
-      <div class="actions"><button id="connectMetaPage" class="primary">Obnovi Page token</button></div>
+      <div class="actions">
+        <button id="startMetaOAuth" class="primary">Povezi preko Facebook login-a</button>
+        <button id="connectMetaPage">Obnovi Page token rucno</button>
+      </div>
       <div id="metaConnectResult" class="test-result"><span>Koristi ovo kada token prestane da salje poruke.</span></div>`
     )
   );
@@ -653,6 +656,7 @@ function renderConnection() {
       <div id="metaHealthResult" class="test-result"><span>Pokreni proveru pre testiranja poruka.</span></div>`
     )
   );
+  panels.channels.querySelector("#startMetaOAuth").addEventListener("click", startMetaOAuth);
   panels.channels.querySelector("#connectMetaPage").addEventListener("click", connectMetaPage);
   panels.channels.querySelector("#checkMetaHealth").addEventListener("click", checkMetaHealth);
 }
@@ -1018,6 +1022,21 @@ async function connectMetaPage() {
     setMetaConnectResult(`<span class="success-text">Povezano: ${escapeHtml(result.page?.name || result.page?.id || "Meta stranica")}.${learningText}</span>${warningText}`);
   } catch (error) {
     setMetaConnectResult(`<span class="danger-text">${escapeHtml(error.message || "Povezivanje nije uspelo")}</span>`);
+  }
+}
+
+async function startMetaOAuth() {
+  setMetaConnectResult("<span>Pripremam Facebook povezivanje...</span>");
+  try {
+    if (dirty) {
+      setMetaConnectResult("<span>Prvo cuvam podesavanja...</span>");
+      await save();
+    }
+    const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/meta-oauth-start`);
+    setMetaConnectResult(`<span class="success-text">Otvaram Facebook login. Ako Meta prijavi redirect gresku, dodaj ovaj URL u Meta app: ${escapeHtml(result.redirectUri)}</span>`);
+    window.location.href = result.authUrl;
+  } catch (error) {
+    setMetaConnectResult(`<span class="danger-text">${escapeHtml(error.message || "Facebook povezivanje nije pokrenuto")}</span>`);
   }
 }
 
