@@ -155,6 +155,12 @@
     "minScore": 0.35,
     "autoReplyThreshold": 0.82,
     "maxMatches": 4,
+    "learning": {
+      "fromOldChatsEnabled": false,
+      "suggestFromNewChats": true,
+      "maxOldChats": 25,
+      "autoApprove": false
+    },
     "documents": [
       {
         "id": "privacy-basics",

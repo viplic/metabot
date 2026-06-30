@@ -624,6 +624,15 @@ function renderConnection() {
   panels.channels.innerHTML = "";
   renderAiSettings(panels.channels);
   renderChannels({ append: true });
+  panels.channels.insertAdjacentHTML(
+    "beforeend",
+    section(
+      "Provera povezivanja",
+      `<div class="actions"><button id="checkMetaHealth" class="primary">Proveri Meta tokene</button></div>
+      <div id="metaHealthResult" class="test-result"><span>Pokreni proveru pre testiranja poruka.</span></div>`
+    )
+  );
+  panels.channels.querySelector("#checkMetaHealth").addEventListener("click", checkMetaHealth);
 }
 
 function renderChannels({ append = false } = {}) {
@@ -785,7 +794,14 @@ function fieldItem(field) {
 function renderKnowledge() {
   panels.knowledge.innerHTML = section(
     "Predlozi za ucenje",
-    `<div class="learning-actions">
+    `<div class="grid three">
+      ${checkboxField("Uci iz novih nesigurnih razgovora", config.knowledge.learning.suggestFromNewChats, (value) => (config.knowledge.learning.suggestFromNewChats = value))}
+      ${checkboxField("Uci iz starih razgovora", config.knowledge.learning.fromOldChatsEnabled, (value) => (config.knowledge.learning.fromOldChatsEnabled = value))}
+      ${numberField("Max starih razgovora", config.knowledge.learning.maxOldChats, (value) => (config.knowledge.learning.maxOldChats = Number(value)), 1, 200, 1)}
+      ${checkboxField("Auto-odobri naucene odgovore", config.knowledge.learning.autoApprove, (value) => (config.knowledge.learning.autoApprove = value))}
+    </div>
+    <p class="muted">Predlozi se cuvaju odvojeno za ovog klijenta. Najsigurnije je da ostane rucno odobravanje.</p>
+    <div class="learning-actions">
       <button id="generateLearningSuggestions" class="primary">Pronadji iz razgovora</button>
       <span>${learningMemories.filter((memory) => memory.status === "review").length} ceka proveru</span>
     </div>
@@ -826,7 +842,9 @@ function renderKnowledge() {
   );
 
   bindInputs(panels.knowledge);
-  panels.knowledge.querySelector("#generateLearningSuggestions").addEventListener("click", generateLearningSuggestions);
+  const generateButton = panels.knowledge.querySelector("#generateLearningSuggestions");
+  generateButton.disabled = !config.knowledge.learning.fromOldChatsEnabled;
+  generateButton.addEventListener("click", generateLearningSuggestions);
   panels.knowledge.querySelectorAll("[data-approve-learning]").forEach((button) => {
     button.addEventListener("click", () => approveLearningMemory(button.dataset.approveLearning));
   });
@@ -910,14 +928,41 @@ function learningMemoryItem(memory) {
 }
 
 async function generateLearningSuggestions() {
+  if (!config.knowledge.learning.fromOldChatsEnabled) {
+    setSaved("Ukljuci opciju 'Uci iz starih razgovora' i sacuvaj.", false, true);
+    return;
+  }
   setSaved("Analiziram razgovore...", false);
-  const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/learning?action=generate`, {
-    method: "POST"
-  });
+  let result;
+  try {
+    result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/learning?action=generate`, {
+      method: "POST"
+    });
+  } catch (error) {
+    setSaved(error.message || "Ucenje nije pokrenuto", false, true);
+    return;
+  }
   tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
   learningMemories = tenantStore.memories || [];
   setSaved(`Dodato predloga: ${result.created}`, true);
   renderKnowledge();
+}
+
+async function checkMetaHealth() {
+  const resultEl = panels.channels.querySelector("#metaHealthResult");
+  resultEl.innerHTML = "<span>Proveravam...</span>";
+  try {
+    const health = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/meta-health`);
+    resultEl.innerHTML = (health.channels || []).map((channel) => {
+      const label = channel.ok ? "OK" : channel.status === "missing_token" ? "Nedostaje token" : "Token nije validan";
+      const detail = channel.ok
+        ? `${channel.metaIdentity?.name || channel.metaIdentity?.id || "Meta profil"} radi.`
+        : `${channel.message || "Nalepi novi Page access token i sacuvaj."}`;
+      return `<span class="${channel.ok ? "success-text" : "danger-text"}">${escapeHtml(channel.name)}: ${escapeHtml(label)} - ${escapeHtml(detail)}</span>`;
+    }).join("");
+  } catch (error) {
+    resultEl.innerHTML = `<span class="danger-text">${escapeHtml(error.message || "Provera nije uspela")}</span>`;
+  }
 }
 
 async function approveLearningMemory(memoryId) {
@@ -1337,6 +1382,11 @@ function normalizeClientConfig(value) {
   normalized.automation.handoffKeywords ||= [];
   normalized.automation.riskyKeywords ||= [];
   normalized.knowledge ||= {};
+  normalized.knowledge.learning ||= {};
+  normalized.knowledge.learning.fromOldChatsEnabled ??= false;
+  normalized.knowledge.learning.suggestFromNewChats ??= true;
+  normalized.knowledge.learning.maxOldChats ||= 25;
+  normalized.knowledge.learning.autoApprove ??= false;
   normalized.knowledge.documents ||= [];
   normalized.ai ||= {};
   normalized.ai.model ||= "gpt-5.5";

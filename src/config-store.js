@@ -411,6 +411,11 @@ export function normalizeConfig(config) {
   normalized.knowledge.minScore = clampNumber(normalized.knowledge.minScore ?? 0.35, 0, 1);
   normalized.knowledge.autoReplyThreshold = clampNumber(normalized.knowledge.autoReplyThreshold ?? 0.82, 0, 1);
   normalized.knowledge.maxMatches = Number(normalized.knowledge.maxMatches || 4);
+  normalized.knowledge.learning ||= {};
+  normalized.knowledge.learning.fromOldChatsEnabled = Boolean(normalized.knowledge.learning.fromOldChatsEnabled);
+  normalized.knowledge.learning.suggestFromNewChats = normalized.knowledge.learning.suggestFromNewChats !== false;
+  normalized.knowledge.learning.maxOldChats = Math.max(1, Math.min(200, Number(normalized.knowledge.learning.maxOldChats || 25)));
+  normalized.knowledge.learning.autoApprove = Boolean(normalized.knowledge.learning.autoApprove);
   normalized.knowledge.documents = ensureArray(normalized.knowledge.documents).map((document, index) => ({
     id: document.id || `knowledge-${Date.now()}-${index}`,
     enabled: document.enabled !== false,

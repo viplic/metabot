@@ -61,6 +61,11 @@ function normalizeClientConfig(value) {
   normalized.meta ||= {};
   normalized.channels ||= [];
   normalized.knowledge ||= {};
+  normalized.knowledge.learning ||= {};
+  normalized.knowledge.learning.fromOldChatsEnabled ??= false;
+  normalized.knowledge.learning.suggestFromNewChats ??= true;
+  normalized.knowledge.learning.maxOldChats ||= 25;
+  normalized.knowledge.learning.autoApprove ??= false;
   normalized.knowledge.documents ||= [];
   normalized.ai ||= {};
   normalized.ai.modelRouting ||= {};
@@ -255,9 +260,13 @@ function renderKnowledge() {
     "Odgovori i baza znanja",
     `<div class="grid three">
       ${checkboxField("Baza znanja uključena", config.knowledge.enabled, (value) => (config.knowledge.enabled = value))}
+      ${checkboxField("Uči iz novih nesigurnih razgovora", config.knowledge.learning.suggestFromNewChats, (value) => (config.knowledge.learning.suggestFromNewChats = value))}
+      ${checkboxField("Dozvoli učenje iz starih razgovora", config.knowledge.learning.fromOldChatsEnabled, (value) => (config.knowledge.learning.fromOldChatsEnabled = value))}
+      ${numberField("Max starih razgovora", config.knowledge.learning.maxOldChats, (value) => (config.knowledge.learning.maxOldChats = Number(value)), 1, 200, 1)}
       ${numberField("Auto odgovor skor", config.knowledge.autoReplyThreshold, (value) => (config.knowledge.autoReplyThreshold = Number(value)), 0, 1, 0.01)}
       ${numberField("Max izvora", config.knowledge.maxMatches, (value) => (config.knowledge.maxMatches = Number(value)))}
     </div>
+    <p class="muted">Stari razgovori se analiziraju samo za ovaj biznis i služe za predloge odgovora koje admin odobrava.</p>
     <div class="collection">${config.knowledge.documents.map(knowledgeItem).join("")}</div>
     <div class="actions"><button id="addKnowledge">Dodaj dokument</button></div>`
   );

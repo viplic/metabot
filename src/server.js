@@ -37,7 +37,7 @@ import {
   verifyAdminAuth,
   verifyMetaSignature
 } from "./security.js";
-import { findChannel, normalizeMetaPayload, sendMetaText, fetchMetaUserProfile } from "./meta-client.js";
+import { findChannel, normalizeMetaPayload, sendMetaText, fetchMetaUserProfile, getPageAccessToken } from "./meta-client.js";
 import { crawlTenantSite, catalogToKnowledgeDocuments } from "./site-crawler.js";
 import {
   appendLearningMemory,
@@ -245,7 +245,7 @@ async function processWebhookPayload(payload, tenantId = DEFAULT_TENANT_ID) {
       appendConversationMessages(conversation, incoming.text, result, config, incoming.attachments || []);
       await recordCommerceOutcome({ tenantId, config, conversation, incoming, result });
       await recordUsageOutcome({ tenantId, config, incoming, result });
-      await maybeCreateLearningSuggestion({ tenantId, conversation, incoming, result });
+      await maybeCreateLearningSuggestion({ tenantId, config, conversation, incoming, result });
       await maybeOpenTicket(config, conversation, incoming, result);
 
       if (result.sendAllowed !== false && result.reply) {
@@ -580,6 +580,10 @@ async function handleTenantApi(request, response, url, route) {
     return sendJson(response, 200, synced);
   }
 
+  if (request.method === "GET" && route.resource === "meta-health") {
+    return sendJson(response, 200, await checkTenantMetaHealth(tenantId));
+  }
+
   if (request.method === "POST" && route.resource === "access") {
     return sendJson(response, 200, await resetTenantPortalPassword(tenantId));
   }
@@ -632,7 +636,11 @@ async function handleLearningApi(request, response, url, route) {
   }
 
   if (request.method === "POST" && !route.memoryId && url.searchParams.get("action") === "generate") {
-    return sendJson(response, 200, await generateLearningSuggestionsFromConversations(tenantId));
+    try {
+      return sendJson(response, 200, await generateLearningSuggestionsFromConversations(tenantId));
+    } catch (error) {
+      return sendJson(response, error.statusCode || 500, { error: error.code || "learning_generation_failed", message: error.message });
+    }
   }
 
   if (request.method === "POST" && route.memoryId && route.action === "approve") {
@@ -677,6 +685,68 @@ async function handleLearningApi(request, response, url, route) {
   }
 
   sendJson(response, 404, { error: "not_found" });
+}
+
+async function checkTenantMetaHealth(tenantId) {
+  const config = await loadTenantConfig(tenantId);
+  const version = config.meta?.graphApiVersion || "v25.0";
+
+  const channels = await Promise.all((config.channels || []).map(async (channel) => {
+    const { accessToken, source } = getPageAccessToken(config, channel);
+    const base = {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+      enabled: Boolean(channel.enabled),
+      sendEnabled: Boolean(channel.sendEnabled),
+      tokenSource: source,
+      tokenPresent: Boolean(accessToken),
+      ok: false,
+      status: "missing_token"
+    };
+
+    if (!accessToken) return base;
+
+    try {
+      const url = new URL(`https://graph.facebook.com/${version}/me`);
+      url.searchParams.set("fields", "id,name");
+      url.searchParams.set("access_token", accessToken);
+      const response = await fetchWithTimeout(url, {}, 8000);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ...base,
+          status: "invalid_token",
+          errorCode: body?.error?.code || null,
+          errorSubcode: body?.error?.error_subcode || null,
+          message: body?.error?.message || `Meta returned ${response.status}`
+        };
+      }
+
+      return {
+        ...base,
+        ok: true,
+        status: "ok",
+        metaIdentity: {
+          id: body.id || "",
+          name: body.name || ""
+        }
+      };
+    } catch (error) {
+      return {
+        ...base,
+        status: "check_failed",
+        message: error.message
+      };
+    }
+  }));
+
+  return {
+    tenantId,
+    ok: channels.filter((channel) => channel.enabled && channel.sendEnabled).every((channel) => channel.ok),
+    checkedAt: new Date().toISOString(),
+    channels
+  };
 }
 
 async function maybeOpenTicket(config, conversation, incoming, result) {
@@ -789,18 +859,38 @@ async function recordCommerceOutcome({ tenantId, config, conversation, incoming,
   return record;
 }
 
-async function maybeCreateLearningSuggestion({ tenantId, conversation, incoming, result }) {
+async function maybeCreateLearningSuggestion({ tenantId, config, conversation, incoming, result }) {
+  const learning = config?.knowledge?.learning || {};
+  if (learning.suggestFromNewChats === false && incoming.source !== "old_chat_scan") return null;
   const question = String(incoming.text || "").trim();
   if (!shouldSuggestLearning(question, result)) return null;
   if (await hasSimilarLearningMemory(tenantId, question)) return null;
 
   const suggestedAnswer = buildSuggestedLearningAnswer(result);
   const memory = await appendLearningMemory(tenantId, {
-    status: "review",
+    status: learning.autoApprove ? "approved" : "review",
     question: question.slice(0, 800),
     suggestedAnswer,
     source: `conversation:${conversation.id}:${result.reason || result.action || "unknown"}`
   });
+
+  if (learning.autoApprove && suggestedAnswer) {
+    const documentId = `learned-${memory.id}`;
+    await saveTenantConfig(tenantId, {
+      ...config,
+      knowledge: {
+        ...(config.knowledge || {}),
+        documents: mergeKnowledgeDocuments(config.knowledge?.documents || [], [{
+          id: documentId,
+          enabled: true,
+          title: question.slice(0, 120),
+          keywords: extractLearningKeywords(question),
+          content: `Pitanje kupca: ${question}\nProveren odgovor: ${suggestedAnswer}`,
+          response: suggestedAnswer
+        }])
+      }
+    });
+  }
 
   conversation.audit.push({
     actor: "learning",
@@ -841,14 +931,23 @@ function extractLearningKeywords(question) {
 
 async function generateLearningSuggestionsFromConversations(tenantId, limit = 25) {
   const config = await loadTenantConfig(tenantId);
+  if (!config.knowledge?.learning?.fromOldChatsEnabled) {
+    const error = new Error("Learning from old chats is disabled for this tenant.");
+    error.statusCode = 403;
+    error.code = "old_chat_learning_disabled";
+    throw error;
+  }
   const conversations = pruneExpiredConversations(await loadConversations(tenantId), config.privacy.retentionDays);
   let created = 0;
+  const maxOldChats = Number(limit || config.knowledge.learning.maxOldChats || 25);
 
-  for (const conversation of conversations.slice(0, Number(limit || 25))) {
+  for (const conversation of conversations.slice(0, maxOldChats)) {
     const messages = conversation.messages || [];
-    const lastUser = [...messages].reverse().find((message) => message.role === "user" && message.body);
+    const lastUser = [...messages].reverse().find((message) => (message.sender === "user" || message.role === "user") && message.body);
     if (!lastUser) continue;
-    const lastBot = [...messages].reverse().find((message) => message.role === "assistant" && message.body);
+    const lastBot = [...messages].reverse().find((message) =>
+      (message.sender === "bot" || message.sender === "assistant" || message.role === "assistant") && message.body
+    );
     const pseudoResult = {
       action: conversation.status === "handoff" ? "handoff" : "reply",
       reason: conversation.status || "conversation_review",
@@ -857,8 +956,9 @@ async function generateLearningSuggestionsFromConversations(tenantId, limit = 25
     };
     const memory = await maybeCreateLearningSuggestion({
       tenantId,
+      config,
       conversation,
-      incoming: { text: lastUser.body },
+      incoming: { text: lastUser.body, source: "old_chat_scan" },
       result: pseudoResult
     });
     if (memory) created += 1;
@@ -1118,7 +1218,7 @@ function tenantIdFromWebhookPath(pathname) {
 }
 
 function matchTenantApiRoute(pathname) {
-  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site)$/);
+  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health)$/);
   if (!match) return null;
   return {
     tenantId: normalizeTenantId(match[1]),

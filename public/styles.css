@@ -1264,6 +1264,14 @@ textarea {
   color: var(--muted);
 }
 
+.success-text {
+  color: var(--success);
+}
+
+.danger-text {
+  color: var(--danger);
+}
+
 .pill.danger {
   color: #fecaca;
   background: rgba(239, 68, 68, 0.14);
