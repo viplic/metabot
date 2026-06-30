@@ -767,30 +767,25 @@ async function startTenantMetaOAuth(tenantId, request) {
   const config = await loadTenantConfig(tenantId);
   const appId = String(config.meta?.appId || "").trim();
   if (!appId) return badRequest("meta_app_id_required", "Unesi Meta App ID i sacuvaj pre povezivanja preko Facebook login-a.");
+  const configId = String(config.meta?.businessLoginConfigId || "").trim();
+  if (!configId) {
+    return badRequest(
+      "meta_business_config_required",
+      "Unesi Business Login Configuration ID iz Meta Developers > Facebook Login for Business > Configurations, sacuvaj, pa pokreni povezivanje."
+    );
+  }
 
   const redirectUri = metaOAuthRedirectUri(request);
   const state = signMetaOAuthState({ tenantId, redirectUri, createdAt: Date.now() });
   const version = config.meta?.graphApiVersion || "v25.0";
-  const configId = String(config.meta?.businessLoginConfigId || "").trim();
   const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
   authUrl.searchParams.set("client_id", appId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("auth_type", "rerequest");
-  if (configId) {
-    authUrl.searchParams.set("config_id", configId);
-    authUrl.searchParams.set("override_default_response_type", "true");
-  } else {
-    authUrl.searchParams.set("scope", [
-      "pages_show_list",
-      "pages_read_engagement",
-      "pages_manage_metadata",
-      "pages_messaging",
-      "instagram_basic",
-      "instagram_manage_messages"
-    ].join(","));
-  }
+  authUrl.searchParams.set("config_id", configId);
+  authUrl.searchParams.set("override_default_response_type", "true");
 
   return {
     authUrl: authUrl.toString(),
