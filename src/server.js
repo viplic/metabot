@@ -991,9 +991,25 @@ function metaConnectError(code, message) {
 }
 
 function metaOAuthRedirectUri(request) {
+  const publicAppUrl = normalizedPublicAppUrl();
+  if (publicAppUrl) return `${publicAppUrl}/meta-oauth/callback`;
+
   const host = request.headers["x-forwarded-host"] || request.headers.host;
   const proto = request.headers["x-forwarded-proto"] || (isLocalHost(host) ? "http" : "https");
   return `${proto}://${host}/meta-oauth/callback`;
+}
+
+function normalizedPublicAppUrl() {
+  const configured =
+    process.env.PUBLIC_APP_URL ||
+    process.env.NIBACHAT_PUBLIC_URL ||
+    process.env.SITE_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    "";
+  const trimmed = String(configured).trim();
+  if (!trimmed) return "";
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return withProtocol.replace(/\/+$/, "");
 }
 
 function signMetaOAuthState(payload) {
