@@ -875,13 +875,20 @@ async function connectTenantMetaPage(tenantId, body = {}) {
   let pages = [];
   try {
     pages = await fetchManagedPages({ version, accessToken: pageLookupToken });
+    if (!pages.length && preferredPageId) {
+      const directPage = await fetchManagedPageById({ version, accessToken: pageLookupToken, pageId: preferredPageId });
+      if (directPage) pages = [directPage];
+    }
   } catch (error) {
     const message = exchangeWarning
       ? `Meta nije prihvatila ovaj User Access Token. Napravi novi User token za istu aplikaciju i obavezno koristi copy ikonicu. Detalj: ${error.message || exchangeWarning}`
       : error.message;
     throw metaConnectError("meta_user_token_invalid", message);
   }
-  if (!pages.length) return badRequest("no_managed_pages", "Meta nije vratila nijednu Facebook stranicu za ovaj token.");
+  if (!pages.length) {
+    const pageHint = preferredPageId ? ` Proveri da je Page ID tacan (${preferredPageId}) i da je ta stranica izabrana u Facebook login dozvolama.` : "";
+    return badRequest("no_managed_pages", `Meta nije vratila nijednu Facebook stranicu za ovaj token.${pageHint}`);
+  }
 
   const configuredPageIds = new Set((config.channels || []).map((channel) => String(channel.pageId || "")).filter(Boolean));
   const selectedPage = pages.find((page) => preferredPageId && String(page.id) === preferredPageId) ||
@@ -962,6 +969,18 @@ async function fetchManagedPages({ version, accessToken }) {
     throw metaConnectError("managed_pages_failed", body?.error?.message || `Meta returned ${response.status}`);
   }
   return Array.isArray(body.data) ? body.data : [];
+}
+
+async function fetchManagedPageById({ version, accessToken, pageId }) {
+  const cleanPageId = String(pageId || "").trim();
+  if (!cleanPageId) return null;
+  const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(cleanPageId)}`);
+  url.searchParams.set("fields", "id,name,access_token,instagram_business_account");
+  url.searchParams.set("access_token", accessToken);
+  const response = await fetchWithTimeout(url, {}, 10000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return null;
+  return body?.id ? body : null;
 }
 
 function cleanMetaAccessToken(value) {
