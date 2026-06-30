@@ -807,6 +807,42 @@ test("commerce analyzer does not collect order details for normal price question
   assert.equal(result.missingFields.length, 0);
 });
 
+test("delivery and production questions use short configured replies before generic knowledge", async () => {
+  const config = await loadConfig();
+  config.business.deliveryReply = "Dostava je 10 KM za celu BiH.";
+  config.business.productionTimeReply = "Rok izrade i isporuke je 2-3 radna dana.";
+  config.automation.rules = [];
+  config.automation.faqs = [];
+  config.knowledge.enabled = true;
+  config.knowledge.documents = [
+    {
+      id: "delivery-long",
+      enabled: true,
+      title: "Dostava",
+      keywords: ["dostava"],
+      content: "Brza i sigurna dostava Nudimo brzu i pouzdanu dostavu sa pracenjem."
+    }
+  ];
+
+  const delivery = await routeIncomingMessage({
+    text: "Koja je cijena dostave?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.equal(delivery.reason, "delivery_price");
+  assert.equal(delivery.reply, "Dostava je 10 KM za celu BiH.");
+
+  const production = await routeIncomingMessage({
+    text: "Za koliko dana stize?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.equal(production.reason, "production_time");
+  assert.equal(production.reply, "Rok izrade i isporuke je 2-3 radna dana.");
+});
+
 test("commerce analyzer links product images to catalog price and note metadata", () => {
   const commerce = analyzeCommerceMessage({
     text: "Hocu ovo, tekst na proizvodu: Srecan rodjendan",

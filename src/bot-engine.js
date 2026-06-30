@@ -121,6 +121,30 @@ export async function routeIncomingMessage({
     });
   }
 
+  if (commerce.intent === "delivery_price") {
+    return decision({
+      action: "reply",
+      reply: formatDeliveryReply(config),
+      confidence: commerce.confidence,
+      reason: "delivery_price",
+      matched: "delivery",
+      profileUpdates,
+      commerce
+    });
+  }
+
+  if (commerce.intent === "production_time") {
+    return decision({
+      action: "reply",
+      reply: formatProductionTimeReply(config),
+      confidence: commerce.confidence,
+      reason: "production_time",
+      matched: "production_time",
+      profileUpdates,
+      commerce
+    });
+  }
+
   if (commerce.intent === "exchange") {
     return decision({
       action: "reply",
@@ -325,6 +349,20 @@ function formatProductPriceReply(product = {}, config = {}) {
   if (product.name && product.price) return `${product.name} košta ${humanPrice(product.price)}.${cta}`;
   if (product.name) return `To je ${product.name}. Cenu možemo proveriti odmah.`;
   return "Možete mi poslati naziv proizvoda ili još jednu jasniju sliku?";
+}
+
+function formatDeliveryReply(config = {}) {
+  const reply = config.business?.deliveryReply || "";
+  if (reply) return reply;
+  const cta = config.business?.salesCta ? ` ${config.business.salesCta}` : "";
+  return `Dostavu možemo proveriti odmah.${cta}`.trim();
+}
+
+function formatProductionTimeReply(config = {}) {
+  const reply = config.business?.productionTimeReply || "";
+  if (reply) return reply;
+  const cta = config.business?.salesCta ? ` ${config.business.salesCta}` : "";
+  return `Rok izrade i isporuke možemo proveriti odmah.${cta}`.trim();
 }
 
 function humanPrice(value) {
