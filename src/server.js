@@ -860,7 +860,8 @@ async function connectTenantMetaPage(tenantId, body = {}) {
   const appId = String(config.meta?.appId || body.appId || "").trim();
   const appSecret = getAppSecret(config);
   const userAccessToken = cleanMetaAccessToken(body.userAccessToken);
-  const preferredPageId = String(body.pageId || "").trim();
+  const configuredPageIds = new Set((config.channels || []).map((channel) => String(channel.pageId || "")).filter(Boolean));
+  const preferredPageId = String(body.pageId || configuredPageIds.values().next().value || "").trim();
 
   if (!appId) return badRequest("meta_app_id_required", "Unesi Meta App ID u Meta API podesavanjima i sacuvaj.");
   if (!appSecret) return badRequest("meta_app_secret_required", "Unesi App secret u Meta API podesavanjima i sacuvaj.");
@@ -913,7 +914,6 @@ async function connectTenantMetaPage(tenantId, body = {}) {
     return badRequest("no_managed_pages", `Meta nije vratila nijednu Facebook stranicu za ovaj token.${pageHint}`);
   }
 
-  const configuredPageIds = new Set((config.channels || []).map((channel) => String(channel.pageId || "")).filter(Boolean));
   const selectedPage = pages.find((page) => preferredPageId && String(page.id) === preferredPageId) ||
     pages.find((page) => configuredPageIds.has(String(page.id))) ||
     pages[0];
