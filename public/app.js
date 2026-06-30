@@ -989,22 +989,20 @@ async function checkMetaHealth() {
 }
 
 async function connectMetaPage() {
-  const resultEl = panels.channels.querySelector("#metaConnectResult");
   const userAccessToken = panels.channels.querySelector("#metaConnectUserToken")?.value?.trim() || "";
   const pageId = panels.channels.querySelector("#metaConnectPageId")?.value?.trim() || "";
   if (!userAccessToken) {
-    resultEl.innerHTML = `<span class="danger-text">Nalepi User Access Token pre obnove.</span>`;
+    setMetaConnectResult(`<span class="danger-text">Nalepi User Access Token pre obnove.</span>`);
     return;
   }
 
-  resultEl.innerHTML = "<span>Povezujem Meta stranicu...</span>";
+  setMetaConnectResult("<span>Povezujem Meta stranicu...</span>");
   try {
     if (dirty) {
-      resultEl.innerHTML = "<span>Prvo cuvam podesavanja...</span>";
+      setMetaConnectResult("<span>Prvo cuvam podesavanja...</span>");
       await save();
     }
-    const activeResultEl = panels.channels.querySelector("#metaConnectResult");
-    activeResultEl.innerHTML = "<span>Povezujem Meta stranicu...</span>";
+    setMetaConnectResult("<span>Povezujem Meta stranicu...</span>");
     const result = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/meta-connect`, {
       method: "POST",
       body: JSON.stringify({ userAccessToken, pageId, appId: config.meta.appId })
@@ -1016,11 +1014,16 @@ async function connectMetaPage() {
     const learningText = result.learning?.created ? ` Ucenje: ${result.learning.created} predloga.` : "";
     renderConnection();
     renderSidebar();
-    panels.channels.querySelector("#metaConnectResult").innerHTML =
-      `<span class="success-text">Povezano: ${escapeHtml(result.page?.name || result.page?.id || "Meta stranica")}.${learningText}</span>`;
+    const warningText = result.warning ? ` <span class="muted">Napomena: ${escapeHtml(result.warning)}</span>` : "";
+    setMetaConnectResult(`<span class="success-text">Povezano: ${escapeHtml(result.page?.name || result.page?.id || "Meta stranica")}.${learningText}</span>${warningText}`);
   } catch (error) {
-    resultEl.innerHTML = `<span class="danger-text">${escapeHtml(error.message || "Povezivanje nije uspelo")}</span>`;
+    setMetaConnectResult(`<span class="danger-text">${escapeHtml(error.message || "Povezivanje nije uspelo")}</span>`);
   }
+}
+
+function setMetaConnectResult(html) {
+  const resultEl = panels.channels.querySelector("#metaConnectResult");
+  if (resultEl) resultEl.innerHTML = html;
 }
 
 async function approveLearningMemory(memoryId) {

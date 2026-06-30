@@ -766,8 +766,23 @@ async function connectTenantMetaPage(tenantId, body = {}) {
   if (!appSecret) return badRequest("meta_app_secret_required", "Unesi App secret u Meta API podesavanjima i sacuvaj.");
   if (!userAccessToken) return badRequest("meta_user_token_required", "Nalepi User Access Token za reconnect.");
 
-  const longLivedUserToken = await exchangeForLongLivedUserToken({ version, appId, appSecret, userAccessToken });
-  const pages = await fetchManagedPages({ version, accessToken: longLivedUserToken });
+  let pageLookupToken = userAccessToken;
+  let exchangeWarning = "";
+  try {
+    pageLookupToken = await exchangeForLongLivedUserToken({ version, appId, appSecret, userAccessToken });
+  } catch (error) {
+    exchangeWarning = error.message;
+  }
+
+  let pages = [];
+  try {
+    pages = await fetchManagedPages({ version, accessToken: pageLookupToken });
+  } catch (error) {
+    const message = exchangeWarning
+      ? `Meta nije prihvatila ovaj User Access Token. Napravi novi User token za istu aplikaciju i obavezno koristi copy ikonicu. Detalj: ${error.message || exchangeWarning}`
+      : error.message;
+    throw metaConnectError("meta_user_token_invalid", message);
+  }
   if (!pages.length) return badRequest("no_managed_pages", "Meta nije vratila nijednu Facebook stranicu za ovaj token.");
 
   const configuredPageIds = new Set((config.channels || []).map((channel) => String(channel.pageId || "")).filter(Boolean));
@@ -819,6 +834,7 @@ async function connectTenantMetaPage(tenantId, body = {}) {
       name: selectedPage.name || ""
     },
     instagramBusinessAccount: instagramId ? { id: instagramId } : null,
+    warning: exchangeWarning || "",
     learning,
     config: publicConfig(saved)
   };
