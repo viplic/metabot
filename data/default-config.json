@@ -11,6 +11,7 @@
   "meta": {
     "graphApiVersion": "v25.0",
     "appId": "",
+    "businessLoginConfigId": "",
     "verifyToken": "change-this-token",
     "requireSignature": true,
     "appSecretEnv": "META_APP_SECRET",

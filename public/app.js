@@ -668,6 +668,7 @@ function renderChannels({ append = false } = {}) {
     `<div class="grid">
       ${textField("Graph API verzija", config.meta.graphApiVersion, (value) => (config.meta.graphApiVersion = value))}
       ${textField("Meta App ID", config.meta.appId, (value) => (config.meta.appId = value))}
+      ${textField("Business Login Configuration ID", config.meta.businessLoginConfigId, (value) => (config.meta.businessLoginConfigId = value))}
       ${textField("Verify token", config.meta.verifyToken, (value) => (config.meta.verifyToken = value))}
       ${checkboxField("Signature provera", config.meta.requireSignature, (value) => (config.meta.requireSignature = value))}
       ${secretField("App secret", config.meta.appSecretValue, Boolean(config.meta.hasAppSecret), (value) => (config.meta.appSecretValue = value))}
@@ -1456,6 +1457,7 @@ function normalizeClientConfig(value) {
   normalized.business ||= {};
   normalized.meta ||= {};
   normalized.meta.appId ||= "";
+  normalized.meta.businessLoginConfigId ||= "";
   normalized.meta.appSecretValue ||= "";
   normalized.meta.pageAccessTokenValue ||= "";
   normalized.channels ||= [];

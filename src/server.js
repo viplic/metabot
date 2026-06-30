@@ -771,25 +771,32 @@ async function startTenantMetaOAuth(tenantId, request) {
   const redirectUri = metaOAuthRedirectUri(request);
   const state = signMetaOAuthState({ tenantId, redirectUri, createdAt: Date.now() });
   const version = config.meta?.graphApiVersion || "v25.0";
+  const configId = String(config.meta?.businessLoginConfigId || "").trim();
   const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
   authUrl.searchParams.set("client_id", appId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("auth_type", "rerequest");
-  authUrl.searchParams.set("scope", [
-    "pages_show_list",
-    "pages_read_engagement",
-    "pages_manage_metadata",
-    "pages_messaging",
-    "instagram_basic",
-    "instagram_manage_messages"
-  ].join(","));
+  if (configId) {
+    authUrl.searchParams.set("config_id", configId);
+    authUrl.searchParams.set("override_default_response_type", "true");
+  } else {
+    authUrl.searchParams.set("scope", [
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_metadata",
+      "pages_messaging",
+      "instagram_basic",
+      "instagram_manage_messages"
+    ].join(","));
+  }
 
   return {
     authUrl: authUrl.toString(),
     redirectUri,
-    scopes: authUrl.searchParams.get("scope").split(",")
+    configId: configId || "",
+    scopes: authUrl.searchParams.get("scope")?.split(",") || []
   };
 }
 
@@ -873,19 +880,40 @@ async function connectTenantMetaPage(tenantId, body = {}) {
   }
 
   let pages = [];
+  const diagnostics = {
+    tenantId,
+    preferredPageId: preferredPageId || "",
+    usedLongLivedExchange: pageLookupToken !== userAccessToken,
+    meAccountsCount: 0,
+    meFieldsCount: 0,
+    directPageFound: false
+  };
   try {
     pages = await fetchManagedPages({ version, accessToken: pageLookupToken });
+    diagnostics.meAccountsCount = pages.length;
+    if (!pages.length) {
+      const fieldPages = await fetchManagedPagesViaMeFields({ version, accessToken: pageLookupToken });
+      diagnostics.meFieldsCount = fieldPages.length;
+      if (fieldPages.length) pages = fieldPages;
+    }
     if (!pages.length && preferredPageId) {
       const directPage = await fetchManagedPageById({ version, accessToken: pageLookupToken, pageId: preferredPageId });
+      diagnostics.directPageFound = Boolean(directPage);
       if (directPage) pages = [directPage];
     }
   } catch (error) {
+    console.warn("Meta connect token lookup failed", {
+      ...diagnostics,
+      code: error.code || "",
+      message: error.message || ""
+    });
     const message = exchangeWarning
       ? `Meta nije prihvatila ovaj User Access Token. Napravi novi User token za istu aplikaciju i obavezno koristi copy ikonicu. Detalj: ${error.message || exchangeWarning}`
       : error.message;
     throw metaConnectError("meta_user_token_invalid", message);
   }
   if (!pages.length) {
+    console.warn("Meta connect returned no pages", diagnostics);
     const pageHint = preferredPageId ? ` Proveri da je Page ID tacan (${preferredPageId}) i da je ta stranica izabrana u Facebook login dozvolama.` : "";
     return badRequest("no_managed_pages", `Meta nije vratila nijednu Facebook stranicu za ovaj token.${pageHint}`);
   }
@@ -969,6 +997,16 @@ async function fetchManagedPages({ version, accessToken }) {
     throw metaConnectError("managed_pages_failed", body?.error?.message || `Meta returned ${response.status}`);
   }
   return Array.isArray(body.data) ? body.data : [];
+}
+
+async function fetchManagedPagesViaMeFields({ version, accessToken }) {
+  const url = new URL(`https://graph.facebook.com/${version}/me`);
+  url.searchParams.set("fields", "accounts{id,name,access_token,instagram_business_account}");
+  url.searchParams.set("access_token", accessToken);
+  const response = await fetchWithTimeout(url, {}, 10000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return [];
+  return Array.isArray(body.accounts?.data) ? body.accounts.data : [];
 }
 
 async function fetchManagedPageById({ version, accessToken, pageId }) {

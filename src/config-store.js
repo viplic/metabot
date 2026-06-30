@@ -318,6 +318,7 @@ export function normalizeConfig(config) {
   normalized.meta ||= {};
   normalized.meta.graphApiVersion ||= "v25.0";
   normalized.meta.appId = String(normalized.meta.appId || "").trim();
+  normalized.meta.businessLoginConfigId = String(normalized.meta.businessLoginConfigId || "").trim();
   normalized.channels = ensureArray(normalized.channels).map((channel, index) => ({
     id: channel.id || `${channel.type || "channel"}-${index + 1}`,
     type: channel.type || "messenger",
