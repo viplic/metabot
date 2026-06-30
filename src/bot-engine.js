@@ -169,6 +169,18 @@ export async function routeIncomingMessage({
     });
   }
 
+  const knowledgeMatches = retrieveKnowledge(cleanText, config);
+  if (shouldAutoReplyFromKnowledge(knowledgeMatches[0], config)) {
+    return decision({
+      action: "reply",
+      reply: interpolate(knowledgeMatches[0].answer, { business: config.business, channelType }),
+      confidence: knowledgeMatches[0].score,
+      reason: "knowledge",
+      matched: knowledgeMatches[0].title,
+      profileUpdates
+    });
+  }
+
   const ruleMatch = findBestRule(lower, config.automation.rules);
   if (ruleMatch) {
     return decision({
@@ -189,18 +201,6 @@ export async function routeIncomingMessage({
       confidence: faqMatch.confidence,
       reason: "faq",
       matched: faqMatch.faq.question,
-      profileUpdates
-    });
-  }
-
-  const knowledgeMatches = retrieveKnowledge(cleanText, config);
-  if (shouldAutoReplyFromKnowledge(knowledgeMatches[0], config)) {
-    return decision({
-      action: "reply",
-      reply: interpolate(knowledgeMatches[0].answer, { business: config.business, channelType }),
-      confidence: knowledgeMatches[0].score,
-      reason: "knowledge",
-      matched: knowledgeMatches[0].title,
       profileUpdates
     });
   }

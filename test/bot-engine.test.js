@@ -554,6 +554,63 @@ test("product knowledge auto replies stay concise and hide links", async () => {
   assert.doesNotMatch(result.reply, /https?:\/\//);
 });
 
+test("specific product knowledge beats generic pricing FAQ", async () => {
+  const config = {
+    business: {
+      defaultReply: "Default",
+      salesCta: "Ako želite da poručite, ostavite nam podatke ovde."
+    },
+    automation: {
+      enabled: true,
+      handoffKeywords: [],
+      riskyKeywords: [],
+      rules: [],
+      faqs: [
+        {
+          id: "pricing",
+          enabled: true,
+          question: "Koliko kosta usluga?",
+          keywords: ["cena", "cijena", "koliko kosta"],
+          answer: "Cene zavise od usluge."
+        }
+      ],
+      confidenceThreshold: 0.72,
+      collectFields: []
+    },
+    knowledge: {
+      enabled: true,
+      minScore: 0.2,
+      autoReplyThreshold: 0.75,
+      maxMatches: 4,
+      documents: [
+        {
+          id: "product-medaljon-graviranje",
+          enabled: true,
+          title: "Medaljon sa slikom - personalizovani medaljon",
+          keywords: ["medaljon", "medaljona", "graviranje", "medaljon za graviranje", "ogrlica sa slikom"],
+          content: "Proizvod: Medaljon sa slikom - Personalizovani medaljon\nCena: 38.90 BAM\nOpis: Personalizovani medaljon za graviranje i sliku.",
+          response: "Medaljon za graviranje je 38.90 KM. Ako želite da poručite, ostavite nam podatke ovde."
+        }
+      ]
+    },
+    orders: {},
+    ai: { enabled: false },
+    catalog: {},
+    handoff: { enabled: false }
+  };
+
+  const result = await routeIncomingMessage({
+    text: "Koja je cena medaljona za graviranje?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(result.reason, "knowledge");
+  assert.match(result.reply, /38\.90 KM/);
+  assert.doesNotMatch(result.reply, /zavise od usluge/i);
+});
+
 test("vague price question without image does not guess a product from catalog", async () => {
   const config = {
     business: { defaultReply: "Default" },
