@@ -510,7 +510,7 @@ test("knowledge retrieval can answer before AI fallback", async () => {
 
 test("product knowledge auto replies stay concise and hide links", async () => {
   const config = {
-    business: { defaultReply: "Default" },
+    business: { defaultReply: "Default", salesCta: "Ako želite da poručite, ostavite nam vaše podatke." },
     automation: {
       enabled: true,
       handoffKeywords: [],
@@ -550,7 +550,7 @@ test("product knowledge auto replies stay concise and hide links", async () => {
   });
 
   assert.equal(result.reason, "knowledge");
-  assert.equal(result.reply, "Majica Alfa košta 1990 RSD.");
+  assert.equal(result.reply, "Majica Alfa košta 1990 RSD. Ako želite da poručite, ostavite nam vaše podatke.");
   assert.doesNotMatch(result.reply, /https?:\/\//);
 });
 
@@ -850,6 +850,29 @@ test("commerce analyzer detects incomplete orders and missing fields", () => {
   assert.equal(result.extracted.product.name, "crvenu majicu");
   assert.ok(result.missingFields.includes("name"));
   assert.ok(result.missingFields.includes("street"));
+});
+
+test("commerce analyzer treats full customer details as an order after CTA", () => {
+  const result = analyzeCommerceMessage({
+    text: [
+      "Ime i prezime: Ana Anic",
+      "Grad: Sarajevo",
+      "Postanski broj: 71000",
+      "Adresa: Zmaja od Bosne 12",
+      "Telefon: 061 123 456",
+      "Medaljon za graviranje"
+    ].join("\n"),
+    config: { orders: { requiredFields: ["name", "city", "postalCode", "street", "phone", "product"] } },
+    catalog: { products: [{ name: "Medaljon za graviranje", price: "38.90 BAM" }] }
+  });
+
+  assert.equal(result.intent, "order");
+  assert.deepEqual(result.missingFields, []);
+  assert.equal(result.extracted.customer.name, "Ana Anic");
+  assert.equal(result.extracted.delivery.city, "Sarajevo");
+  assert.equal(result.extracted.delivery.postalCode, "71000");
+  assert.equal(result.extracted.product.name, "Medaljon za graviranje");
+  assert.equal(result.extracted.product.price, "38.90 BAM");
 });
 
 test("commerce analyzer does not collect order details for normal price questions", () => {

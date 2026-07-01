@@ -22,6 +22,11 @@ export async function appendRecordToSheet({ config, tenantId, record }) {
 
   const text = await response.text();
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        "Google Sheets webhook nije javno dostupan. U Google Apps Script deploy podesite: Execute as: Me i Who has access: Anyone, pa nalepite novi /exec URL."
+      );
+    }
     throw new Error(`Google Sheets webhook failed ${response.status}: ${text.slice(0, 240)}`);
   }
 

@@ -737,10 +737,15 @@ async function checkTenantMetaHealth(tenantId) {
         };
       }
 
+      const subscription = channel.type === "messenger"
+        ? await checkPageWebhookSubscription({ version, pageId: channel.pageId || body.id, pageAccessToken: accessToken })
+        : null;
+
       return {
         ...base,
         ok: true,
         status: "ok",
+        subscription,
         metaIdentity: {
           id: body.id || "",
           name: body.name || ""
@@ -761,6 +766,31 @@ async function checkTenantMetaHealth(tenantId) {
     checkedAt: new Date().toISOString(),
     channels
   };
+}
+
+async function checkPageWebhookSubscription({ version, pageId, pageAccessToken }) {
+  if (!pageId || !pageAccessToken) return { ok: false, status: "missing_page_id" };
+  const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}/subscribed_apps`);
+  url.searchParams.set("access_token", pageAccessToken);
+  try {
+    const response = await fetchWithTimeout(url, {}, 8000);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: "check_failed",
+        message: body?.error?.message || `Meta returned ${response.status}`
+      };
+    }
+    const data = Array.isArray(body.data) ? body.data : [];
+    return {
+      ok: data.length > 0,
+      status: data.length > 0 ? "subscribed" : "not_subscribed",
+      apps: data.map((app) => ({ id: app.id || "", name: app.name || "" })).filter((app) => app.id || app.name)
+    };
+  } catch (error) {
+    return { ok: false, status: "check_failed", message: error.message };
+  }
 }
 
 async function startTenantMetaOAuth(tenantId, request) {
@@ -922,6 +952,11 @@ async function connectTenantMetaPage(tenantId, body = {}) {
     return badRequest("page_token_not_returned", "Meta nije vratila Page access token za izabranu stranicu.");
   }
 
+  const subscription = await subscribePageToWebhooks({
+    version,
+    pageId: selectedPage.id,
+    pageAccessToken: selectedPage.access_token
+  });
   const instagramId = selectedPage.instagram_business_account?.id || "";
   const updated = structuredClone(config);
   updated.meta ||= {};
@@ -962,10 +997,32 @@ async function connectTenantMetaPage(tenantId, body = {}) {
       name: selectedPage.name || ""
     },
     instagramBusinessAccount: instagramId ? { id: instagramId } : null,
-    warning: exchangeWarning || "",
+    subscription,
+    warning: [exchangeWarning, subscription.ok ? "" : subscription.message].filter(Boolean).join(" "),
     learning,
     config: publicConfig(saved)
   };
+}
+
+async function subscribePageToWebhooks({ version, pageId, pageAccessToken }) {
+  const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}/subscribed_apps`);
+  url.searchParams.set("access_token", pageAccessToken);
+  url.searchParams.set("subscribed_fields", "messages,messaging_postbacks");
+
+  try {
+    const response = await fetchWithTimeout(url, { method: "POST" }, 10000);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.success === false) {
+      return {
+        ok: false,
+        status: response.status,
+        message: body?.error?.message || `Meta subscription returned ${response.status}`
+      };
+    }
+    return { ok: true, fields: ["messages", "messaging_postbacks"] };
+  } catch (error) {
+    return { ok: false, message: error.message };
+  }
 }
 
 async function exchangeForLongLivedUserToken({ version, appId, appSecret, userAccessToken }) {

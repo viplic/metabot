@@ -173,7 +173,10 @@ export async function routeIncomingMessage({
   if (shouldAutoReplyFromKnowledge(knowledgeMatches[0], config)) {
     return decision({
       action: "reply",
-      reply: interpolate(knowledgeMatches[0].answer, { business: config.business, channelType }),
+      reply: appendSalesCtaIfPriceAnswer(
+        interpolate(knowledgeMatches[0].answer, { business: config.business, channelType }),
+        config
+      ),
       confidence: knowledgeMatches[0].score,
       reason: "knowledge",
       matched: knowledgeMatches[0].title,
@@ -349,6 +352,17 @@ function formatProductPriceReply(product = {}, config = {}) {
   if (product.name && product.price) return `${product.name} košta ${humanPrice(product.price)}.${cta}`;
   if (product.name) return `To je ${product.name}. Cenu možemo proveriti odmah.`;
   return "Možete mi poslati naziv proizvoda ili još jednu jasniju sliku?";
+}
+
+function appendSalesCtaIfPriceAnswer(reply, config = {}) {
+  const cta = String(config.business?.salesCta || "").trim();
+  if (!cta || !mentionsPrice(reply)) return reply;
+  if (normalizeText(reply).includes(normalizeText(cta).slice(0, 24))) return reply;
+  return `${String(reply || "").trim()} ${cta}`.trim();
+}
+
+function mentionsPrice(value) {
+  return /(?:\b\d+(?:[.,]\d{1,2})?\s*(?:km|bam|rsd|eur|€|\$)\b|\b(?:km|bam|rsd|eur)\s*\d+(?:[.,]\d{1,2})?)/i.test(String(value || ""));
 }
 
 function formatDeliveryReply(config = {}) {

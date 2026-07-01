@@ -90,8 +90,24 @@ function detectIntent(lower, extracted = {}) {
   if (DELIVERY_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "delivery_price";
   if (PRODUCTION_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "production_time";
   if (ORDER_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "order";
+  if (looksLikeOrderDetails(extracted)) return "order";
   if (extracted.product?.name && /\b(hocu|hoću|zelim|želim|uzimam|uzecu|uzeću)\s+(ovo|taj|tu|to)\b/.test(lower)) return "order";
   return "question";
+}
+
+function looksLikeOrderDetails(extracted = {}) {
+  const customer = extracted.customer || {};
+  const delivery = extracted.delivery || {};
+  const product = extracted.product || {};
+  const filled = [
+    customer.name,
+    customer.phone,
+    delivery.street,
+    delivery.city,
+    delivery.postalCode,
+    product.name
+  ].filter(Boolean).length;
+  return Boolean(customer.phone && filled >= 4);
 }
 
 function scoreIntent(intent, lower, extracted) {
@@ -107,8 +123,8 @@ function extractOrderFields(text, catalog, attachments = []) {
   const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
   const phone = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/)?.[0]?.replace(/\s+/g, " ").trim() || "";
   const postalCode = text.match(/\b\d{5}\b/)?.[0] || "";
-  const name = text.match(/(?:zovem se|ime mi je|ja sam|ime i prezime[:\s]+)\s+([A-Za-zÀ-ž\s.'-]{2,50})/i)?.[1]?.trim() || "";
-  const street = text.match(/(?:ulica|adresa|adresa je|ul\.?)[:\s]+([A-Za-zÀ-ž0-9\s.'/-]{3,80})/i)?.[1]?.trim() || "";
+  const name = text.match(/(?:zovem se|ime mi je|ja sam|ime i prezime)[:\s]+([A-Za-zÀ-ž .'’-]{2,50})(?=\n|$|,|;)/i)?.[1]?.trim() || "";
+  const street = text.match(/(?:ulica|adresa|adresa je|ul\.?)[:\s]+([A-Za-zÀ-ž0-9 .'’/-]{3,80})(?=\n|$|,|;)/i)?.[1]?.trim() || "";
   const city = extractCity(text);
   const quantity = Number(text.match(/(?:x|kom|komada|kolicina|količina)\s?(\d{1,3})/i)?.[1] || text.match(/\b(\d{1,3})\s?(?:kom|komada)\b/i)?.[1] || 1);
   const color = text.match(/(?:boja|u boji|color)[:\s]+([A-Za-zÀ-ž\s-]{3,30})/i)?.[1]?.trim() || "";
@@ -143,9 +159,33 @@ function extractOrderFields(text, catalog, attachments = []) {
 }
 
 function extractCity(text) {
-  const explicit = text.match(/(?:grad|mesto)[:\s]+([A-Za-zÀ-ž\s-]{2,40})/i)?.[1]?.trim();
+  const explicit = text.match(/(?:grad|mesto)[:\s]+([A-Za-zÀ-ž -]{2,40})(?=\n|$|,|;)/i)?.[1]?.trim();
   if (explicit) return explicit;
-  const common = ["beograd", "novi sad", "nis", "niš", "kragujevac", "subotica", "zrenjanin", "leskovac", "cacak", "čačak"];
+  const common = [
+    "sarajevo",
+    "banja luka",
+    "tuzla",
+    "zenica",
+    "mostar",
+    "bijeljina",
+    "brcko",
+    "brčko",
+    "prijedor",
+    "doboj",
+    "trebinje",
+    "bihac",
+    "bihać",
+    "beograd",
+    "novi sad",
+    "nis",
+    "niš",
+    "kragujevac",
+    "subotica",
+    "zrenjanin",
+    "leskovac",
+    "cacak",
+    "čačak"
+  ];
   const lower = normalize(text);
   return common.find((city) => lower.includes(normalize(city))) || "";
 }
