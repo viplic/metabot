@@ -86,9 +86,34 @@ Znanje unosi po temama, ne sve u jedan blok:
 - Pakovanje
 - Podaci za porudzbinu
 
+Najbrzi nacin:
+
+1. Otvori tab **Znanje**.
+2. Klikni **Dodaj osnovne teme**.
+3. U svakoj temi zameni primer stvarnim pravilima tog shopa.
+4. Sacuvaj izmene.
+5. Testiraj pitanja iz odeljka "Test pre pustanja".
+
 Direktan odgovor koristi kada zelis isti odgovor svaki put, na primer:
 
 > Dostava je 10 KM za celu BiH. Ako zelite da porucite, ostavite nam vase podatke.
+
+Sta nikad ne ostavljati prazno:
+
+- Cena dostave
+- Drzave/gradovi gde se salje
+- Rok izrade i isporuke
+- Nacin placanja
+- Da li je zamena moguca
+- Ko placa trosak reklamacije
+- Materijal i garancija
+- Da li paket dolazi u poklon kutiji
+
+Za proizvode:
+
+- Ako shop ima sajt, prvo popuni **URL sajta/shopa** i klikni **Ucitaj proizvode i pravila sa sajta**.
+- Ako neki proizvod ima posebnu cenu, dodaj ga kao poseban dokument u znanju.
+- Ako kupac posalje sliku, sistem pokusava da je veze za katalog i cenu. Ako slika nije jasna, trazi jasniju sliku ili naziv proizvoda, ne link.
 
 ## 6. Porudzbine
 
@@ -118,3 +143,23 @@ Za svaki novi klijent testiraj:
 - Posalji reklamaciju
 
 Ako odgovor trazi link, previse objasnjava ili ide u handoff bez potrebe, dodaj pravilo ili dokument u bazu znanja za tog klijenta.
+
+## 8. Kako radi ucenje
+
+Ucenje je odvojeno po klijentu. Jedan biznis nikada ne koristi razgovore drugog biznisa.
+
+Opcije:
+
+- **Uci iz novih nesigurnih razgovora**: kada sistem nije siguran, napravi predlog odgovora za taj biznis.
+- **Uci iz starih razgovora**: analizira poslednjih 20-30 razgovora tog biznisa i predlaze nova pravila/odgovore.
+- **Auto-odobri naucene odgovore**: ne preporucuje se za prve klijente. Bolje je da admin odobri predloge.
+
+Preporucen rad:
+
+1. Pusti automatizaciju da radi.
+2. Jednom dnevno otvori tab **Znanje**.
+3. Pregledaj predloge za ucenje.
+4. Ispravi tekst ako treba.
+5. Klikni **Odobri u znanje**.
+
+Tako baza znanja postaje bolja bez mesanja klijenata.

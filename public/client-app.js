@@ -296,6 +296,11 @@ function renderKnowledge() {
     </div>`
   );
   panels.knowledge.insertAdjacentHTML("beforeend", section(
+    "Brzi start",
+    `<p class="muted">Ako tek podesavate profil, dodajte osnovne teme pa u svakoj zamenite primer stvarnim pravilima vaseg shopa.</p>
+    <div class="actions"><button id="addKnowledgeStarterPack" class="primary">Dodaj osnovne teme</button></div>`
+  ));
+  panels.knowledge.insertAdjacentHTML("beforeend", section(
     "Odgovori i baza znanja",
     `<div class="grid three">
       ${checkboxField("Baza znanja uključena", config.knowledge.enabled, (value) => (config.knowledge.enabled = value))}
@@ -310,6 +315,11 @@ function renderKnowledge() {
     <div class="actions"><button id="addKnowledge">Dodaj dokument</button></div>`
   ));
   bindInputs(panels.knowledge);
+  panels.knowledge.querySelector("#addKnowledgeStarterPack").addEventListener("click", () => {
+    addKnowledgeStarterPack();
+    markDirty();
+    renderKnowledge();
+  });
   panels.knowledge.querySelector("#addKnowledge").addEventListener("click", () => {
     config.knowledge.documents.push({
       id: `knowledge-${Date.now()}`,
@@ -329,6 +339,67 @@ function renderKnowledge() {
       renderKnowledge();
     });
   });
+}
+
+function addKnowledgeStarterPack() {
+  config.knowledge ||= {};
+  config.knowledge.documents ||= [];
+  const existingIds = new Set(config.knowledge.documents.map((document) => document.id));
+  const starter = [
+    {
+      id: "starter-delivery",
+      title: "Dostava i rok isporuke",
+      keywords: ["dostava", "postarina", "isporuka", "rok", "stize", "kurir"],
+      content: "Upisite cenu dostave, drzave/gradove u koje saljete i rok izrade/isporuke. Primer: Dostava je 10 KM za celu BiH. Rok izrade i isporuke je 2-3 radna dana.",
+      response: ""
+    },
+    {
+      id: "starter-payment",
+      title: "Placanje",
+      keywords: ["placanje", "pouzece", "kurir", "gotovina", "kartica"],
+      content: "Upisite nacine placanja. Primer: Placanje je pouzecem, kuriru prilikom preuzimanja.",
+      response: ""
+    },
+    {
+      id: "starter-prices",
+      title: "Cene proizvoda",
+      keywords: ["cena", "koliko kosta", "cenovnik", "popust"],
+      content: "Upisite najcesce proizvode i cene. Ako kupac pita za cenu, odgovor treba da bude kratak i bez linka kada je proizvod prepoznat.",
+      response: ""
+    },
+    {
+      id: "starter-orders",
+      title: "Porudzbine i podaci",
+      keywords: ["porucujem", "porudzbina", "narudzba", "podaci", "adresa", "telefon"],
+      content: "Za porudzbinu trazimo: ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod. Ako kupac posalje boju, model, tekst za personalizaciju ili napomenu, sacuvajte i to.",
+      response: "Za porudzbinu nam posaljite ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod koji zelite."
+    },
+    {
+      id: "starter-complaints",
+      title: "Reklamacije i zamene",
+      keywords: ["reklamacija", "zamena", "osteceno", "nije stiglo", "problem"],
+      content: "Upisite pravila reklamacije, zamene i troskova dostave kod reklamacije. Odgovor treba da bude smiren i kratak.",
+      response: ""
+    },
+    {
+      id: "starter-materials",
+      title: "Materijali, garancija i pakovanje",
+      keywords: ["materijal", "garancija", "poklon", "kutija", "pakovanje"],
+      content: "Upisite od cega su proizvodi, da li dolaze u poklon kutiji i kakva je garancija.",
+      response: ""
+    },
+    {
+      id: "starter-images",
+      title: "Slike proizvoda",
+      keywords: ["slika", "fotografija", "ovo", "proizvod"],
+      content: "Ako kupac posalje sliku, automatizacija pokusava da prepozna proizvod iz kataloga i baze znanja. Ako slika nije jasna, treba traziti jasniju sliku ili naziv proizvoda, ne link.",
+      response: ""
+    }
+  ];
+  for (const document of starter) {
+    if (existingIds.has(document.id)) continue;
+    config.knowledge.documents.push({ ...document, enabled: true });
+  }
 }
 
 function knowledgeItem(document) {

@@ -4,7 +4,7 @@
     "language": "sr",
     "timezone": "Europe/Belgrade",
     "shortDescription": "Korisnicka podrska preko Messengera i Instagrama.",
-    "defaultReply": "Hvala na poruci. Provericu dostupne informacije i, ako je potrebno, proslediti razgovor timu za podrsku.",
+    "defaultReply": "Hvala na poruci. Napisite naziv proizvoda ili posaljite sliku, pa cu proveriti dostupne informacije.",
     "privacyNoticeUrl": "",
     "dataDeletionUrl": ""
   },
@@ -45,27 +45,45 @@
     "humanAgentWindowDays": 7,
     "deduplicationWindowHours": 48,
     "confidenceThreshold": 0.72,
-    "leadCapturePrompt": "Da bismo zavrsili zahtev, posaljite jos: {field}.",
+    "leadCapturePrompt": "Da bismo zavrsili porudzbinu, posaljite jos: {field}.",
     "handoffKeywords": ["agent", "operater", "covek", "čovek", "human", "uzivo"],
-    "riskyKeywords": ["reklamacija", "advokat", "tužba", "tuzba", "povracaj novca", "refund", "kartica"],
+    "riskyKeywords": ["advokat", "tužba", "tuzba", "prevara", "inspekcija", "policija"],
     "collectFields": [
       {
         "id": "name",
-        "label": "ime",
+        "label": "ime i prezime",
         "enabled": true,
-        "required": false
+        "required": true
+      },
+      {
+        "id": "city",
+        "label": "grad",
+        "enabled": true,
+        "required": true
+      },
+      {
+        "id": "postalCode",
+        "label": "postanski broj",
+        "enabled": true,
+        "required": true
+      },
+      {
+        "id": "street",
+        "label": "ulica i broj",
+        "enabled": true,
+        "required": true
       },
       {
         "id": "phone",
-        "label": "telefon",
+        "label": "broj telefona",
         "enabled": true,
-        "required": false
+        "required": true
       },
       {
-        "id": "topic",
-        "label": "tema upita",
+        "id": "product",
+        "label": "proizvod",
         "enabled": true,
-        "required": false
+        "required": true
       }
     ],
     "rules": [
@@ -92,14 +110,14 @@
         "enabled": true,
         "question": "Koliko kosta usluga?",
         "keywords": ["cena", "cenovnik", "koliko kosta", "price"],
-        "answer": "Cene zavise od usluge. Posaljite sta vam treba i pripremicu odgovor ili cu proslediti timu za podrsku."
+        "answer": "Napisite naziv proizvoda ili posaljite sliku proizvoda, pa cu proveriti tacnu cenu. Ako zelite da porucite, ostavite nam vase podatke."
       },
       {
         "id": "appointment",
         "enabled": true,
         "question": "Kako da zakazem?",
         "keywords": ["zakazivanje", "termin", "rezervacija"],
-        "answer": "Mozete poslati zeljeni datum, vreme i kontakt telefon. Agent ce potvrditi najblizi slobodan termin."
+        "answer": "Napisite sta zelite da porucite i ostavite podatke za porudzbinu, pa cemo potvrditi."
       }
     ]
   },
@@ -126,7 +144,7 @@
       "complexKeywords": ["analiziraj", "strategija", "uporedi", "objasni detaljno", "detaljno", "plan", "problem", "greska", "greška", "kod", "integracija", "ugovor", "reklamacija", "pravni", "izracunaj", "izračunaj"]
     },
     "fallbackToHumanOnError": true,
-    "systemPrompt": "Ti si iskusan predstavnik korisnicke podrske za konkretan shop. Odgovaraj kratko, tacno, prirodno i bez izmisljanja. Ne pominji da si AI ili automatizacija. Koristi samo podatke ovog klijenta, njegov katalog, pravila, FAQ, bazu znanja i ovaj razgovor. Nikad ne koristi informacije drugih klijenata ili drugih shopova. Ako nisi siguran, predlozi da tim proveri zahtev."
+    "systemPrompt": "Ti si iskusan predstavnik korisnicke podrske za konkretan shop. Odgovaraj kratko, tacno, prirodno i bez izmisljanja. Ne pominji da si AI ili automatizacija. Koristi samo podatke ovog klijenta, njegov katalog, pravila, FAQ, bazu znanja i ovaj razgovor. Nikad ne koristi informacije drugih klijenata ili drugih shopova. Ne salji linkove osim ako kupac izricito trazi. Ako kupac pita za cenu, prvo pokusaj da prepoznas proizvod iz kataloga, naziva ili slike. Kada das cenu ili resis pitanje oko kupovine, dodaj: \"Ako zelite da porucite, ostavite nam vase podatke.\" Ako nisi siguran, postavi jedno kratko pitanje za pojasnjenje."
   },
   "catalog": {
     "sourceUrl": "",
@@ -164,6 +182,46 @@
       "autoApprove": false
     },
     "documents": [
+      {
+        "id": "delivery-basics",
+        "enabled": true,
+        "title": "Dostava i rok",
+        "keywords": ["dostava", "postarina", "isporuka", "rok", "stize", "kurir"],
+        "content": "Unesite tacnu cenu dostave, drzave/gradove u koje saljete i rok izrade/isporuke. Ako je podatak poznat, odgovor treba da bude kratak i direktan.",
+        "response": "Dostava zavisi od pravila ovog shopa. Napisite tacnu cenu dostave u bazi znanja da bi odgovor bio potpuno precizan. Ako zelite da porucite, ostavite nam vase podatke."
+      },
+      {
+        "id": "payment-basics",
+        "enabled": true,
+        "title": "Placanje",
+        "keywords": ["placanje", "pouzece", "kartica", "kurir", "gotovina"],
+        "content": "Unesite nacine placanja. Ako je placanje pouzecem, kupcu kratko reci da placa kuriru prilikom preuzimanja.",
+        "response": "Placanje zavisi od pravila ovog shopa. Unesite nacin placanja u bazi znanja da bi odgovor bio precizan."
+      },
+      {
+        "id": "order-basics",
+        "enabled": true,
+        "title": "Podaci za porudzbinu",
+        "keywords": ["porucujem", "porudzbina", "narudzba", "podaci", "adresa", "telefon"],
+        "content": "Za porudzbinu sistem trazi: ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod. Ako kupac posalje boju, model, tekst za personalizaciju ili napomenu, sacuvaj i to.",
+        "response": "Za porudzbinu nam posaljite ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod koji zelite."
+      },
+      {
+        "id": "complaint-basics",
+        "enabled": true,
+        "title": "Reklamacije i zamene",
+        "keywords": ["reklamacija", "osteceno", "ostecen", "zamena", "nije stiglo", "problem"],
+        "content": "Unesite pravila reklamacije, zamene i troskova dostave kod reklamacije. Odgovor treba da bude smiren, kratak i da kupcu trazi broj porudzbine ili podatke ako su potrebni.",
+        "response": "Zao mi je zbog problema. Posaljite nam ime, broj telefona ili broj porudzbine i kratko objasnjenje, pa cemo proveriti i resiti."
+      },
+      {
+        "id": "product-image-basics",
+        "enabled": true,
+        "title": "Slike proizvoda",
+        "keywords": ["slika", "fotografija", "proizvod", "ovo", "koliko je ovo"],
+        "content": "Kada kupac posalje sliku, pokusaj da prepoznas proizvod iz kataloga i baze znanja. Ako slika nije jasna, trazi jasniju sliku ili naziv proizvoda. Ne trazi link od kupca.",
+        "response": ""
+      },
       {
         "id": "privacy-basics",
         "enabled": true,

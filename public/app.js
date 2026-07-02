@@ -903,6 +903,19 @@ function fieldItem(field) {
 
 function renderKnowledge() {
   panels.knowledge.innerHTML = section(
+    "Brzi start za odgovore",
+    `<div class="guide-note">
+      <strong>Najlaksa priprema za novog klijenta:</strong>
+      <span>Prvo ubaci osnovne teme, zatim izmeni konkretne cene, rokove, materijale i pravila za taj shop. Svaka tema ostaje odvojena samo za izabranog klijenta.</span>
+    </div>
+    <div class="actions">
+      <button id="addKnowledgeStarterPack" class="primary">Dodaj osnovne teme</button>
+    </div>`
+  );
+
+  panels.knowledge.insertAdjacentHTML(
+    "beforeend",
+    section(
     "Predlozi za ucenje",
     `<div class="grid three">
       ${checkboxField("Uci iz novih nesigurnih razgovora", config.knowledge.learning.suggestFromNewChats, (value) => (config.knowledge.learning.suggestFromNewChats = value))}
@@ -916,6 +929,7 @@ function renderKnowledge() {
       <span>${learningMemories.filter((memory) => memory.status === "review").length} ceka proveru</span>
     </div>
     <div class="collection">${learningMemories.length ? learningMemories.map(learningMemoryItem).join("") : `<article class="item"><p class="muted">Nema predloga za ucenje.</p></article>`}</div>`
+    )
   );
 
   panels.knowledge.insertAdjacentHTML(
@@ -952,6 +966,11 @@ function renderKnowledge() {
   );
 
   bindInputs(panels.knowledge);
+  panels.knowledge.querySelector("#addKnowledgeStarterPack").addEventListener("click", () => {
+    addKnowledgeStarterPack();
+    markDirty();
+    renderKnowledge();
+  });
   const generateButton = panels.knowledge.querySelector("#generateLearningSuggestions");
   generateButton.disabled = !config.knowledge.learning.fromOldChatsEnabled;
   generateButton.addEventListener("click", generateLearningSuggestions);
@@ -1017,6 +1036,67 @@ function renderKnowledge() {
       renderKnowledge();
     });
   });
+}
+
+function addKnowledgeStarterPack() {
+  config.knowledge ||= {};
+  config.knowledge.documents ||= [];
+  const existingIds = new Set(config.knowledge.documents.map((document) => document.id));
+  const starter = [
+    {
+      id: "starter-delivery",
+      title: "Dostava i rok isporuke",
+      keywords: ["dostava", "postarina", "isporuka", "rok", "stize", "kurir"],
+      content: "Upisi cenu dostave, drzave/gradove u koje saljete i rok izrade/isporuke. Primer: Dostava je 10 KM za celu BiH. Rok izrade i isporuke je 2-3 radna dana.",
+      response: ""
+    },
+    {
+      id: "starter-payment",
+      title: "Placanje",
+      keywords: ["placanje", "pouzece", "kurir", "gotovina", "kartica"],
+      content: "Upisi nacine placanja. Primer: Placanje je pouzecem, kuriru prilikom preuzimanja.",
+      response: ""
+    },
+    {
+      id: "starter-prices",
+      title: "Cene proizvoda",
+      keywords: ["cena", "koliko kosta", "cenovnik", "popust"],
+      content: "Upisi najcesce proizvode i cene. Ako postoji katalog sa sajta, koristi sinhronizaciju sajta. Ako kupac pita za cenu, ne salji link; reci cenu kada je proizvod prepoznat.",
+      response: ""
+    },
+    {
+      id: "starter-orders",
+      title: "Porudzbine i podaci",
+      keywords: ["porucujem", "porudzbina", "narudzba", "podaci", "adresa", "telefon"],
+      content: "Za porudzbinu trazi: ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod. Sacuvaj boju, model, tekst za graviranje ili napomenu ako kupac posalje.",
+      response: "Za porudzbinu nam posaljite ime i prezime, grad, postanski broj, ulicu i broj, broj telefona i proizvod koji zelite."
+    },
+    {
+      id: "starter-complaints",
+      title: "Reklamacije i zamene",
+      keywords: ["reklamacija", "zamena", "osteceno", "nije stiglo", "problem"],
+      content: "Upisi sta radite kada paket kasni, proizvod je ostecen ili kupac trazi zamenu. Odgovor treba da bude smiren i kratak.",
+      response: ""
+    },
+    {
+      id: "starter-materials",
+      title: "Materijali, garancija i pakovanje",
+      keywords: ["materijal", "garancija", "poklon", "kutija", "pakovanje", "celik"],
+      content: "Upisi od cega su proizvodi, da li dolaze u poklon kutiji i kakva je garancija.",
+      response: ""
+    },
+    {
+      id: "starter-images",
+      title: "Slike proizvoda",
+      keywords: ["slika", "fotografija", "ovo", "proizvod"],
+      content: "Ako kupac posalje sliku, prepoznaj proizvod iz kataloga i baze znanja. Ako slika nije jasna, trazi jasniju sliku ili naziv proizvoda. Ne trazi link.",
+      response: ""
+    }
+  ];
+  for (const document of starter) {
+    if (existingIds.has(document.id)) continue;
+    config.knowledge.documents.push({ ...document, enabled: true });
+  }
 }
 
 function learningMemoryItem(memory) {
