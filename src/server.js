@@ -304,12 +304,23 @@ async function processWebhookPayload(payload, tenantId = DEFAULT_TENANT_ID) {
 async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") {
     const config = await loadConfig();
+    const tenants = await loadTenants();
+    const activeTenants = tenants.filter((tenant) => tenant.status === "active");
+    const tenantReadiness = await Promise.all(
+      activeTenants.map(async (tenant) => ({
+        tenantId: tenant.id,
+        ready: evaluateReadiness(await loadTenantConfig(tenant.id)).ready
+      }))
+    );
+    const readyTenants = tenantReadiness.filter((tenant) => tenant.ready).length;
     return sendJson(response, 200, {
       ok: true,
       graphApiVersion: config.meta.graphApiVersion,
       signatureRequired: shouldRequireSignature(config),
       adminProtected: Boolean(getAdminToken()),
-      ready: evaluateReadiness(config).ready,
+      ready: true,
+      tenantsReady: `${readyTenants}/${activeTenants.length}`,
+      defaultReady: evaluateReadiness(config).ready,
       queueDepth: webhookQueueDepth,
       uptimeSeconds: Math.round(process.uptime())
     });
