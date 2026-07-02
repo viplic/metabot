@@ -194,6 +194,19 @@ export async function routeIncomingMessage({
   }
 
   const knowledgeMatches = retrieveKnowledge(cleanText, config);
+  if (hasImageAttachment(attachments) && config.ai.enabled && !commerce.extracted?.product?.name) {
+    const aiDecision = await askAiFallback({
+      text: cleanText,
+      attachments,
+      config,
+      conversation,
+      knowledgeMatches
+    });
+    if (aiDecision) {
+      return decision({ ...aiDecision, profileUpdates });
+    }
+  }
+
   if (shouldAutoReplyFromKnowledge(knowledgeMatches[0], config)) {
     return decision({
       action: "reply",

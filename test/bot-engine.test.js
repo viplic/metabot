@@ -288,6 +288,105 @@ test("OpenAI fallback sends image attachments through Responses API", async () =
   }
 });
 
+test("image price questions use AI vision before generic knowledge fallback", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: url.toString(), options });
+    if (url.toString() === "https://cdn.example.com/unknown-product.jpg") {
+      return {
+        ok: true,
+        headers: new Headers({ "content-type": "image/jpeg", "content-length": "4" }),
+        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          id: "resp_vision_price",
+          model: "gpt-4.1-mini",
+          output: [
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: "Ovo izgleda kao medaljon i cena je 38,90 KM. Ako želite da poručite, ostavite nam vaše podatke."
+                }
+              ]
+            }
+          ]
+        })
+    };
+  };
+
+  try {
+    process.env.OPENAI_API_KEY = "mock-key";
+    const config = {
+      ai: {
+        enabled: true,
+        provider: "openai",
+        apiKeyEnv: "OPENAI_API_KEY",
+        model: "gpt-4.1-mini",
+        maxInputChars: 2000,
+        maxOutputTokens: 500,
+        maxContextChars: 4000,
+        maxHistoryChars: 1600,
+        maxImages: 3,
+        maxImageBytes: 1024,
+        temperature: 0.2,
+        systemPrompt: "Sys prompt",
+        fallbackToHumanOnError: false
+      },
+      automation: {
+        enabled: true,
+        rules: [],
+        faqs: [],
+        collectFields: []
+      },
+      business: {
+        defaultReply: "Default"
+      },
+      knowledge: {
+        enabled: true,
+        documents: [
+          {
+            id: "generic-image-answer",
+            enabled: true,
+            title: "Genericki odgovor za slike",
+            keywords: ["slika", "ovo", "cena"],
+            content: "Napišite mi naziv proizvoda ili pošaljite sliku, pa ću vam odmah reći tačnu cenu."
+          }
+        ]
+      },
+      catalog: {
+        products: []
+      }
+    };
+
+    const result = await routeIncomingMessage({
+      text: "Koliko kosta ovo?",
+      attachments: [{ type: "image", url: "https://cdn.example.com/unknown-product.jpg", mimeType: "image/jpeg" }],
+      config,
+      conversation: { profile: {}, messages: [], audit: [] },
+      channelType: "instagram"
+    });
+
+    assert.equal(result.action, "reply");
+    assert.equal(result.reason, "ai_vision_fallback");
+    assert.match(result.reply, /38,90 KM/);
+    assert.doesNotMatch(result.reply, /pošaljite sliku/i);
+    assert.equal(calls.some((call) => call.url === "https://api.openai.com/v1/responses"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.OPENAI_API_KEY;
+  }
+});
+
 test("OpenAI model routing selects models by prompt complexity", () => {
   const config = {
     ai: {
