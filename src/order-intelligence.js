@@ -123,9 +123,12 @@ function extractOrderFields(text, catalog, attachments = []) {
   const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
   const phone = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/)?.[0]?.replace(/\s+/g, " ").trim() || "";
   const postalCode = text.match(/\b\d{5}\b/)?.[0] || "";
-  const name = text.match(/(?:zovem se|ime mi je|ja sam|ime i prezime)[:\s]+([A-Za-zÀ-ž .'’-]{2,50})(?=\n|$|,|;)/i)?.[1]?.trim() || "";
-  const street = text.match(/(?:ulica|adresa|adresa je|ul\.?)[:\s]+([A-Za-zÀ-ž0-9 .'’/-]{3,80})(?=\n|$|,|;)/i)?.[1]?.trim() || "";
+  const segments = splitOrderSegments(text);
   const city = extractCity(text);
+  const name = text.match(/(?:zovem se|ime mi je|ja sam|ime i prezime)[:\s]+([A-Za-zÀ-ž .'’-]{2,50})(?=\n|$|,|;)/i)?.[1]?.trim() ||
+    inferCustomerName(segments, { city, postalCode, phone });
+  const street = text.match(/(?:ulica|adresa|adresa je|ul\.?)[:\s]+([A-Za-zÀ-ž0-9 .'’/-]{3,80})(?=\n|$|,|;)/i)?.[1]?.trim() ||
+    inferStreetAddress(segments, { city, postalCode, phone, name });
   const quantity = Number(text.match(/(?:x|kom|komada|kolicina|količina)\s?(\d{1,3})/i)?.[1] || text.match(/\b(\d{1,3})\s?(?:kom|komada)\b/i)?.[1] || 1);
   const color = text.match(/(?:boja|u boji|color)[:\s]+([A-Za-zÀ-ž\s-]{3,30})/i)?.[1]?.trim() || "";
   const model = text.match(/(?:model|velicina|veličina|size)[:\s]+([A-Za-zÀ-ž0-9\s-]{1,30})/i)?.[1]?.trim() || "";
@@ -156,6 +159,43 @@ function extractOrderFields(text, catalog, attachments = []) {
       matchConfidence: imageProduct?.confidence || (textProduct ? 0.92 : 0)
     }
   };
+}
+
+function splitOrderSegments(text) {
+  return String(text || "")
+    .split(/[\n,;]+|(?<=[.!?])\s+(?=[A-ZÀ-Ž])/)
+    .map((segment) => segment.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function inferCustomerName(segments, { city = "", postalCode = "", phone = "" } = {}) {
+  return segments.find((segment) => {
+    const normalized = normalize(segment);
+    if (!/^[A-Za-zÀ-ž .'’-]{5,60}$/.test(segment)) return false;
+    if (city && normalized.includes(normalize(city))) return false;
+    if (postalCode && segment.includes(postalCode)) return false;
+    if (phone && segment.includes(phone)) return false;
+    if (ORDER_KEYWORDS.some((keyword) => normalized.includes(normalize(keyword)))) return false;
+    if (DELIVERY_KEYWORDS.some((keyword) => normalized.includes(normalize(keyword)))) return false;
+    return segment.trim().split(/\s+/).length >= 2;
+  }) || "";
+}
+
+function inferStreetAddress(segments, { city = "", postalCode = "", phone = "", name = "" } = {}) {
+  return segments.find((segment) => {
+    const normalized = normalize(segment);
+    if (!/\d+[A-Za-z]?\b/.test(segment)) return false;
+    if (postalCode && segment.includes(postalCode)) return false;
+    if (phone && normalizeDigits(segment) === normalizeDigits(phone)) return false;
+    if (city && normalized === normalize(city)) return false;
+    if (name && normalized === normalize(name)) return false;
+    if (/^\+?\d[\d\s().-]{6,}\d$/.test(segment)) return false;
+    return /[A-Za-zÀ-ž]/.test(segment);
+  }) || "";
+}
+
+function normalizeDigits(value) {
+  return String(value || "").replace(/\D+/g, "");
 }
 
 function extractCity(text) {

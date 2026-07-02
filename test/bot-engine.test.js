@@ -904,6 +904,29 @@ test("commerce analyzer treats full customer details as an order after CTA", () 
   assert.equal(result.extracted.product.price, "38.90 BAM");
 });
 
+test("commerce analyzer extracts free-form order details without labels", () => {
+  const result = analyzeCommerceMessage({
+    text: "HOCU DA PORUCIM MEDALJON ZA GRAVIRANJE. Nikola Jakovljevic, Sarajevo 71000, Zmaja od Bosne 12, 061 123 456",
+    config: { orders: { requiredFields: ["name", "city", "postalCode", "street", "phone", "product"] } },
+    catalog: {
+      products: [{
+        name: "Medaljon za graviranje",
+        price: "38.90 BAM",
+        url: "https://starlightnakit.ba/products/medaljon-sa-slikom-personalizovani-medaljon"
+      }]
+    }
+  });
+
+  assert.equal(result.intent, "order");
+  assert.deepEqual(result.missingFields, []);
+  assert.equal(result.extracted.customer.name, "Nikola Jakovljevic");
+  assert.equal(result.extracted.delivery.city, "sarajevo");
+  assert.equal(result.extracted.delivery.postalCode, "71000");
+  assert.equal(result.extracted.delivery.street, "Zmaja od Bosne 12");
+  assert.equal(result.extracted.customer.phone, "061 123 456");
+  assert.equal(result.extracted.product.price, "38.90 BAM");
+});
+
 test("commerce analyzer does not collect order details for normal price questions", () => {
   const result = analyzeCommerceMessage({
     text: "Zelim samo da znam cenu dostave i da li imate ovu narukvicu?",
