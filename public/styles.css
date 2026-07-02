@@ -341,6 +341,136 @@ a.button-link.primary {
   line-height: 1.55;
 }
 
+.launch-section {
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.10), rgba(59, 130, 246, 0.05)),
+    rgba(15, 23, 42, 0.62);
+}
+
+.launch-section > h2 {
+  margin-bottom: 16px;
+}
+
+.launchpad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.launch-card {
+  display: grid;
+  gap: 10px;
+  min-height: 150px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.58);
+  transition: border-color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.launch-card.is-active {
+  border-color: rgba(16, 185, 129, 0.75);
+  background: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 18px 50px rgba(16, 185, 129, 0.10);
+}
+
+.launch-card.is-ok {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.launch-card span {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  color: #052e20;
+  background: #34d399;
+  font-weight: 900;
+}
+
+.launch-card h3,
+.launch-card p {
+  margin: 0;
+}
+
+.launch-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.connect-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.connect-panel h3,
+.connect-panel p {
+  margin: 0;
+}
+
+.connect-panel p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.advanced-box {
+  margin-top: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.18);
+  overflow: hidden;
+}
+
+.advanced-box > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  color: #d1d5db;
+  font-weight: 800;
+  list-style: none;
+}
+
+.advanced-box > summary::-webkit-details-marker,
+.advanced-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-box > .grid {
+  padding: 0 16px 16px;
+}
+
+.advanced-section {
+  display: block;
+}
+
+.advanced-section > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.advanced-section > summary h2 {
+  margin: 0;
+}
+
+.advanced-section > summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.compact-collection .item {
+  background: rgba(15, 23, 42, 0.42);
+}
+
 .landing-signup {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
@@ -1662,10 +1792,23 @@ dd {
   .side,
   .learning-grid,
   .landing-steps,
+  .launchpad,
   .setup-flow,
   .setup-checklist,
   .wizard-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .connect-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .connect-panel .primary {
+    width: 100% !important;
+  }
+
+  .launch-card {
+    min-height: auto !important;
   }
 
   .stat-grid {

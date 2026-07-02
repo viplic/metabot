@@ -569,22 +569,49 @@ function renderBusiness() {
       </div>
     </section>
     ${section(
-    "Osnovno",
-    `<div class="grid">
+    "Start: ono sto agent mora da zna",
+    `<div class="launchpad">
+      <article class="launch-card is-active">
+        <span>1</span>
+        <h3>Opis biznisa</h3>
+        <p>Sta prodajete, kome, po kojim pravilima i kojim tonom.</p>
+      </article>
+      <article class="launch-card">
+        <span>2</span>
+        <h3>Sajt i proizvodi</h3>
+        <p>Jedan URL je dovoljan da agent cita katalog i cene.</p>
+      </article>
+      <article class="launch-card">
+        <span>3</span>
+        <h3>Porudzbine</h3>
+        <p>Google Sheet prima podatke cim kupac ostavi adresu.</p>
+      </article>
+      <article class="launch-card">
+        <span>4</span>
+        <h3>Test</h3>
+        <p>Pre live poruka proveri cenu, dostavu, rok i reklamacije.</p>
+      </article>
+    </div>
+    <div class="grid">
       ${textField("Naziv", config.business.name, (value) => (config.business.name = value))}
       ${textField("Jezik", config.business.language, (value) => (config.business.language = value))}
-      ${textField("Vremenska zona", config.business.timezone, (value) => (config.business.timezone = value))}
-      ${textField("Link politike privatnosti", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
-      ${textArea("Kratak opis", config.business.shortDescription, (value) => (config.business.shortDescription = value), "full")}
-      ${textArea("Podrazumevani odgovor", config.business.defaultReply, (value) => (config.business.defaultReply = value), "full")}
-      ${textField("Link za brisanje podataka", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value), "full")}
+      ${textArea("Kratak opis za AI agenta", config.business.shortDescription, (value) => (config.business.shortDescription = value), "full")}
       ${textField("URL sajta / shopa", config.catalog.sourceUrl, (value) => (config.catalog.sourceUrl = value), "full")}
-      ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
-      ${numberField("Mesecni AI limit ($)", config.usage.monthlyLimitUsd, (value) => (config.usage.monthlyLimitUsd = Number(value)))}
       ${checkboxField("Google Sheet ukljucen", config.integrations.googleSheets.enabled, (value) => (config.integrations.googleSheets.enabled = value))}
       ${textField("Google Sheet webhook URL za porudzbine", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
       ${textField("Google Sheet pregledni link", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
-    </div>`
+    </div>
+    <details class="advanced-box">
+      <summary>Napredno za ovaj biznis</summary>
+      <div class="grid">
+        ${textField("Vremenska zona", config.business.timezone, (value) => (config.business.timezone = value))}
+        ${textField("Link politike privatnosti", config.business.privacyNoticeUrl, (value) => (config.business.privacyNoticeUrl = value))}
+        ${textArea("Podrazumevani odgovor", config.business.defaultReply, (value) => (config.business.defaultReply = value), "full")}
+        ${textField("Link za brisanje podataka", config.business.dataDeletionUrl, (value) => (config.business.dataDeletionUrl = value), "full")}
+        ${numberField("Osvezavanje sajta na sati", config.catalog.refreshEveryHours, (value) => (config.catalog.refreshEveryHours = Number(value)))}
+        ${numberField("Mesecni AI limit ($)", config.usage.monthlyLimitUsd, (value) => (config.usage.monthlyLimitUsd = Number(value)))}
+      </div>
+    </details>`
   )}`;
   panels.business.insertAdjacentHTML(
     "beforeend",
@@ -637,14 +664,21 @@ function renderBusiness() {
 
 function renderConnection() {
   panels.channels.innerHTML = "";
+  renderLaunchpad(panels.channels);
   renderSetupGuide(panels.channels);
-  renderAiSettings(panels.channels);
-  renderChannels({ append: true });
   panels.channels.insertAdjacentHTML(
     "beforeend",
     section(
-    "Stabilno povezivanje",
-      `<p class="muted">Facebook i Instagram povezuj preko dugmeta ispod. Rucni token koristi samo ako Meta ponisti dozvole.</p>
+    "Povezi Facebook i Instagram",
+      `<div class="connect-panel">
+        <div>
+          <h3>Jedan login za stranicu i Instagram</h3>
+          <p>Prvo koristi Facebook login. NibaChat cuva Page token sifrovano i koristi ga za Messenger i Instagram Direct.</p>
+        </div>
+        <button id="startMetaOAuth" class="primary">Povezi preko Facebook login-a</button>
+      </div>
+      <details class="advanced-box">
+        <summary>Rucna obnova tokena</summary>
       <div class="grid">
         <div class="field">
           <label for="metaConnectUserToken">User Access Token za reconnect</label>
@@ -658,12 +692,14 @@ function renderConnection() {
         </div>
       </div>
       <div class="actions">
-        <button id="startMetaOAuth" class="primary">Povezi preko Facebook login-a</button>
         <button id="connectMetaPage">Obnovi Page token rucno</button>
       </div>
+      </details>
       <div id="metaConnectResult" class="test-result"><span>Prvo koristi zeleno dugme. Rucni token je samo rezervna opcija kada Meta ponisti dozvole.</span></div>`
     )
   );
+  renderChannels({ append: true });
+  renderAiSettings(panels.channels);
   panels.channels.insertAdjacentHTML(
     "beforeend",
     section(
@@ -677,52 +713,74 @@ function renderConnection() {
   panels.channels.querySelector("#checkMetaHealth").addEventListener("click", checkMetaHealth);
 }
 
+function renderLaunchpad(target) {
+  const messenger = config.channels.find((channel) => channel.type === "messenger");
+  const instagram = config.channels.find((channel) => channel.type === "instagram");
+  const hasAi = Boolean(config.ai?.hasApiKey || config.ai?.apiKeyValue || config.ai?.apiKeyEnv);
+  const hasMeta = Boolean((messenger?.pageId || instagram?.pageId) && (messenger?.sendEnabled || instagram?.sendEnabled));
+  const hasKnowledge = Boolean((config.knowledge?.documents || []).some((document) => document.enabled && (document.content || document.response)));
+  const hasTest = Boolean(conversations.length);
+  const cards = [
+    ["Podrska 24/7", "Odgovara kratko na cenu, dostavu, rokove i reklamacije.", hasAi],
+    ["Prodaja i leadovi", "Kad ima cenu, odmah poziva kupca da ostavi podatke.", hasKnowledge],
+    ["Porudzbine", "Prepoznaje ime, grad, adresu, telefon i salje u Sheet.", Boolean(config.integrations?.googleSheets?.webhookUrl)],
+    ["Live kanali", "Messenger i Instagram rade preko sacuvanog Page tokena.", hasMeta || hasTest]
+  ];
+  target.insertAdjacentHTML(
+    "beforeend",
+    `<section class="section launch-section">
+      <p class="eyebrow">Manje koraka, vise kontrole</p>
+      <h2>Pokreni AI agenta bez tehnickog haosa</h2>
+      <div class="launchpad">
+        ${cards.map(([title, text, ok], index) => `<article class="launch-card ${ok ? "is-ok" : index === cards.findIndex((card) => !card[2]) ? "is-active" : ""}">
+          <span>${ok ? "✓" : index + 1}</span>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(text)}</p>
+        </article>`).join("")}
+      </div>
+    </section>`
+  );
+}
+
 function renderSetupGuide(target) {
   const messenger = config.channels.find((channel) => channel.type === "messenger");
   const instagram = config.channels.find((channel) => channel.type === "instagram");
   const hasAi = Boolean(config.ai?.hasApiKey || config.ai?.apiKeyValue || config.ai?.apiKeyEnv);
-  const hasMetaLogin = Boolean(config.meta?.appId && config.meta?.businessLoginConfigId && config.meta?.hasAppSecret);
+  const hasMetaLogin = Boolean(
+    (config.meta?.appId && config.meta?.businessLoginConfigId) ||
+    config.meta?.hasPageAccessToken ||
+    messenger?.hasPageAccessToken ||
+    instagram?.hasPageAccessToken
+  );
   const hasPage = Boolean(messenger?.pageId || instagram?.pageId);
-  const hasIg = Boolean(instagram?.igAccountId);
   const hasKnowledge = Boolean((config.knowledge?.documents || []).some((document) => document.enabled && (document.content || document.response)));
-  const hasSheet = Boolean(config.integrations?.googleSheets?.enabled && config.integrations.googleSheets.webhookUrl);
   const steps = [
     {
-      title: "1. Osnovno",
-      ok: Boolean(config.business?.name && config.business?.description),
+      title: "1. Start",
+      ok: Boolean(config.business?.name && config.business?.shortDescription),
       text: "Naziv, opis shopa, drzava, dostava i rokovi."
     },
     {
-      title: "2. AI",
+      title: "2. AI kljuc",
       ok: hasAi,
-      text: "OpenAI kljuc i kratak sistemski stil odgovora."
+      text: "Jedan kljuc po klijentu. Model routing ostaje automatski."
     },
     {
-      title: "3. Meta",
+      title: "3. Meta login",
       ok: hasMetaLogin && hasPage,
-      text: "App ID, App secret, login konfiguracija i Facebook stranica."
+      text: "Jedan klik povezuje Facebook stranicu i Instagram."
     },
     {
-      title: "4. Instagram",
-      ok: hasIg,
-      text: "IG business ID povezan sa istom Facebook stranicom."
-    },
-    {
-      title: "5. Znanje",
+      title: "4. Znanje i test",
       ok: hasKnowledge,
-      text: "Cene, dostava, reklamacije, materijali i najcesca pitanja."
-    },
-    {
-      title: "6. Sheet",
-      ok: hasSheet,
-      text: "Google Apps Script /exec URL za porudzbine."
+      text: "Ubaci teme, testiraj najcesca pitanja, pa pusti live."
     }
   ];
 
   target.insertAdjacentHTML(
     "beforeend",
     section(
-      "Setup vodič",
+      "Kratak setup",
       `<div class="setup-checklist">
         ${steps.map((step) => `<article class="${step.ok ? "is-ok" : "is-missing"}">
           <span>${step.ok ? "OK" : "!"}</span>
@@ -731,8 +789,8 @@ function renderSetupGuide(target) {
         </article>`).join("")}
       </div>
       <div class="guide-note">
-        <strong>Najbrzi redosled:</strong>
-        <span>Popuni osnovno, ubaci AI kljuc, klikni Facebook login, proveri Meta tokene, zatim testiraj pitanja: cena, dostava, rok, reklamacija i porudzbina.</span>
+        <strong>Najkraci redosled:</strong>
+        <span>Start -> Povezi Meta -> Znanje -> Test agent. Sve ostalo je napredno i ne diras dok ne zatreba.</span>
       </div>`
     )
   );
@@ -741,8 +799,11 @@ function renderSetupGuide(target) {
 function renderChannels({ append = false } = {}) {
   const target = panels.channels;
   const content = section(
-    "Meta API",
-    `<div class="grid">
+    "Tehnicka Meta podesavanja",
+    `<p class="muted">Ovo se popunjava samo jednom po klijentu. U svakodnevnom radu koristi dugme Facebook login i proveru tokena.</p>
+    <details class="advanced-box">
+      <summary>Prikazi App ID, App secret i tokene</summary>
+      <div class="grid">
       ${textField("Graph API verzija", config.meta.graphApiVersion, (value) => (config.meta.graphApiVersion = value))}
       ${textField("Meta App ID", config.meta.appId, (value) => (config.meta.appId = value))}
       ${textField("Business Login Configuration ID", config.meta.businessLoginConfigId, (value) => (config.meta.businessLoginConfigId = value))}
@@ -751,7 +812,8 @@ function renderChannels({ append = false } = {}) {
       ${checkboxField("Signature provera", config.meta.requireSignature, (value) => (config.meta.requireSignature = value))}
       ${secretField("App secret", config.meta.appSecretValue, Boolean(config.meta.hasAppSecret), (value) => (config.meta.appSecretValue = value))}
       ${secretField("Page access token", config.meta.pageAccessTokenValue, Boolean(config.meta.hasPageAccessToken), (value) => (config.meta.pageAccessTokenValue = value), "full")}
-    </div>`
+      </div>
+    </details>`
   );
   if (append) {
     target.insertAdjacentHTML("beforeend", content);
@@ -762,8 +824,12 @@ function renderChannels({ append = false } = {}) {
   target.insertAdjacentHTML(
     "beforeend",
     section(
-    "Kanali",
-    `<div class="collection">
+    "Kanali koji odgovaraju",
+    `<div class="guide-note">
+      <strong>Jednostavno pravilo:</strong>
+      <span>Messenger treba Page ID. Instagram koristi isti Page ID plus IG Account ID. Ako je Page token vec sacuvan kroz login, polja za token po kanalu ostavi prazna.</span>
+    </div>
+    <div class="collection compact-collection">
       ${config.channels.map(channelItem).join("")}
     </div>
     <div class="actions">
@@ -1303,7 +1369,7 @@ function renderAiSettings(target = panels.channels) {
   target.insertAdjacentHTML(
     "beforeend",
     section(
-    "AI fallback",
+    "AI agent",
     `<div class="grid">
       ${checkboxField("Ukljucen", config.ai.enabled, (value) => (config.ai.enabled = value))}
       ${selectField("Provider", config.ai.provider, ["openai", "gemini"], (value) => {
@@ -1311,8 +1377,13 @@ function renderAiSettings(target = panels.channels) {
         if (value === "gemini" && config.ai.model.startsWith("gpt-")) config.ai.model = "gemini-2.5-flash";
         if (value === "openai" && config.ai.model.startsWith("gemini-")) config.ai.model = "gpt-5.5";
       })}
-      ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
       ${secretField("AI API ključ", config.ai.apiKeyValue, Boolean(config.ai.hasApiKey), (value) => (config.ai.apiKeyValue = value), "full")}
+      ${textArea("Stil odgovora", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
+    </div>
+    <details class="advanced-box">
+      <summary>Napredni AI limiti</summary>
+      <div class="grid">
+      ${textField("Model", config.ai.model, (value) => (config.ai.model = value))}
       ${numberField("Max karaktera", config.ai.maxInputChars, (value) => (config.ai.maxInputChars = Number(value)))}
       ${numberField("Max izlaz tokena", config.ai.maxOutputTokens, (value) => (config.ai.maxOutputTokens = Number(value)))}
       ${numberField("Max kontekst", config.ai.maxContextChars, (value) => (config.ai.maxContextChars = Number(value)))}
@@ -1320,16 +1391,16 @@ function renderAiSettings(target = panels.channels) {
       ${numberField("Max slika", config.ai.maxImages, (value) => (config.ai.maxImages = Number(value)))}
       ${numberField("Temperatura", config.ai.temperature, (value) => (config.ai.temperature = Number(value)), 0, 0.35, 0.05)}
       ${checkboxField("Greska vodi na handoff", config.ai.fallbackToHumanOnError, (value) => (config.ai.fallbackToHumanOnError = value))}
-      ${textArea("System prompt", config.ai.systemPrompt, (value) => (config.ai.systemPrompt = value), "full")}
-    </div>`
+      </div>
+    </details>`
     )
   );
 
   target.insertAdjacentHTML(
     "beforeend",
-    section(
-      "Model routing",
-      `<div class="grid">
+    `<details class="section advanced-section">
+      <summary><h2>Automatski izbor modela</h2><span>Napredno</span></summary>
+      <div class="grid">
         ${checkboxField("Automatski izbor modela", config.ai.modelRouting.enabled, (value) => (config.ai.modelRouting.enabled = value))}
         ${textField("Laka pitanja", config.ai.modelRouting.simpleModel, (value) => (config.ai.modelRouting.simpleModel = value))}
         ${textField("Srednja pitanja", config.ai.modelRouting.standardModel, (value) => (config.ai.modelRouting.standardModel = value))}
@@ -1338,8 +1409,8 @@ function renderAiSettings(target = panels.channels) {
         ${numberField("Srednji prag karaktera", config.ai.modelRouting.standardMinChars, (value) => (config.ai.modelRouting.standardMinChars = Number(value)))}
         ${numberField("Zahtevan prag karaktera", config.ai.modelRouting.complexMinChars, (value) => (config.ai.modelRouting.complexMinChars = Number(value)))}
         ${textField("Zahtevne reci", (config.ai.modelRouting.complexKeywords || []).join(", "), (value) => (config.ai.modelRouting.complexKeywords = splitCsv(value)), "full")}
-      </div>`
-    )
+      </div>
+    </details>`
   );
 }
 
