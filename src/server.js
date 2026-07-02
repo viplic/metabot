@@ -580,6 +580,43 @@ async function handleTenantApi(request, response, url, route) {
     });
   }
 
+  if (request.method === "POST" && route.resource === "sheet-test") {
+    const config = await loadTenantConfig(tenantId);
+    const record = {
+      id: `sheet-test-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      type: "order",
+      status: "test",
+      platformUserId: "sheet-test",
+      conversationId: "sheet-test",
+      customer: {
+        name: "TEST NibaChat",
+        phone: "061 000 000",
+        email: ""
+      },
+      product: {
+        name: "TEST proizvod",
+        model: "",
+        color: "",
+        quantity: 1,
+        price: "0"
+      },
+      delivery: {
+        street: "Test adresa 1",
+        city: "Sarajevo",
+        postalCode: "71000"
+      },
+      notes: "Automatski test Google Sheet integracije. Ovaj red moze da se obrise.",
+      missingFields: []
+    };
+
+    try {
+      return sendJson(response, 200, { ok: true, result: await appendRecordToSheet({ config, tenantId, record }) });
+    } catch (error) {
+      return sendJson(response, 502, { ok: false, error: "sheet_test_failed", message: error.message });
+    }
+  }
+
   if (request.method === "POST" && route.resource === "sync-site") {
     const body = await readJsonBody(request);
     const synced = await syncTenantSite(tenantId, body.sourceUrl);
@@ -1696,7 +1733,7 @@ function tenantIdFromWebhookPath(pathname) {
 }
 
 function matchTenantApiRoute(pathname) {
-  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|raw-events|meta-connect|meta-oauth-start)$/);
+  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|sheet-test|meta-health|raw-events|meta-connect|meta-oauth-start)$/);
   if (!match) return null;
   return {
     tenantId: normalizeTenantId(match[1]),

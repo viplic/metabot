@@ -592,6 +592,7 @@ function renderBusiness() {
       "Sajt i katalog",
       `<div class="actions">
         <button id="syncSite" class="primary">Sync sajt za ovog klijenta</button>
+        <button id="testGoogleSheet">Testiraj Google Sheet</button>
       </div>
       <div class="test-result">
         <span>Proizvodi: ${tenantStore?.catalog?.products?.length || 0}</span>
@@ -617,6 +618,20 @@ function renderBusiness() {
     tenantStore = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/store`);
     setSaved(`Ucitan sajt: ${result.products} proizvoda`, true);
     renderAll();
+  });
+  panels.business.querySelector("#testGoogleSheet").addEventListener("click", async () => {
+    setSaved("Testiram Google Sheet...", false);
+    try {
+      await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/sheet-test`, {
+        method: "POST",
+        body: "{}"
+      });
+      setSaved("Google Sheet radi", true);
+      window.alert("Google Sheet radi. Dodat je jedan TEST red koji mozes da obrises.");
+    } catch (error) {
+      setSaved("Sheet greska", false, true);
+      window.alert(`Google Sheet ne radi:\n${error.message}`);
+    }
   });
 }
 
