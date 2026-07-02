@@ -157,6 +157,18 @@ export async function routeIncomingMessage({
     });
   }
 
+  if (commerce.intent === "gift_packaging") {
+    return decision({
+      action: "reply",
+      reply: config.business.giftPackagingReply || "Da, stiže u poklon kutiji. Ako želite da poručite, ostavite nam vaše podatke.",
+      confidence: commerce.confidence,
+      reason: "gift_packaging",
+      matched: "gift_packaging",
+      profileUpdates,
+      commerce
+    });
+  }
+
   if (commerce.intent === "exchange") {
     return decision({
       action: "reply",

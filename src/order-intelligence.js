@@ -24,6 +24,7 @@ const EXCHANGE_KEYWORDS = ["zamena", "zamenu", "zamenim", "zameniti", "zamjena",
 const COMPLAINT_KEYWORDS = ["reklamacija", "reklamacije", "reklamaciju", "osteceno", "oštećeno", "ne radi", "problem", "nezadovoljan", "nezadovoljna", "povrat", "refund"];
 const PRODUCTION_KEYWORDS = ["koliko dana", "rok", "izrada", "kada saljete", "kada šaljete", "kad stize", "kad stiže"];
 const PAYMENT_KEYWORDS = ["placanje", "plaćanje", "placam", "plaćam", "platiti", "placa", "plaća", "kartica", "karticom", "pouzecem", "pouzećem", "kuriru", "gotovina"];
+const GIFT_PACKAGING_KEYWORDS = ["poklon kutija", "poklon kutiji", "kutija", "kutiji", "pakovanje", "upakovano", "zapakovano"];
 
 export function analyzeCommerceMessage({ text, attachments = [], conversation = {}, config = {}, catalog = {} }) {
   const cleanText = String(text || "").trim();
@@ -91,6 +92,7 @@ function detectIntent(lower, extracted = {}) {
   if (DELIVERY_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "delivery_price";
   if (PRODUCTION_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "production_time";
   if (PAYMENT_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "payment";
+  if (GIFT_PACKAGING_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "gift_packaging";
   if (ORDER_KEYWORDS.some((keyword) => lower.includes(normalize(keyword)))) return "order";
   if (looksLikeOrderDetails(extracted)) return "order";
   if (extracted.product?.name && /\b(hocu|hoću|zelim|želim|uzimam|uzecu|uzeću)\s+(ovo|taj|tu|to)\b/.test(lower)) return "order";

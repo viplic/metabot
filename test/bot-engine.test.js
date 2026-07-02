@@ -1040,6 +1040,35 @@ test("exchange and payment questions use business rules before old knowledge", a
   assert.equal(payment.reply, "Plaćanje je pouzećem, kuriru pri dostavi.");
 });
 
+test("gift packaging questions use short configured replies before generic knowledge", async () => {
+  const config = await loadConfig();
+  config.business.giftPackagingReply = "Da, stiže u poklon kutiji. Ako želite da poručite, ostavite nam vaše podatke.";
+  config.automation.rules = [];
+  config.automation.faqs = [];
+  config.knowledge.enabled = true;
+  config.knowledge.documents = [
+    {
+      id: "generic-shop-faq",
+      enabled: true,
+      title: "Sve informacije",
+      keywords: ["poklon", "kutija", "dostava", "placanje", "zamena"],
+      content: "Plaćanje: pouzećem kuriru. Dostava: 10 KM za celu BiH. Rok izrade i isporuke: 2-3 radna dana. Zamena: nije moguća zbog personalizacije."
+    }
+  ];
+
+  const gift = await routeIncomingMessage({
+    text: "Stize li u poklon kutiji?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(gift.reason, "gift_packaging");
+  assert.equal(gift.reply, "Da, stiže u poklon kutiji. Ako želite da poručite, ostavite nam vaše podatke.");
+  assert.doesNotMatch(gift.reply, /Plaćanje:/);
+  assert.doesNotMatch(gift.reply, /Dostava:/);
+});
+
 test("commerce analyzer links product images to catalog price and note metadata", () => {
   const commerce = analyzeCommerceMessage({
     text: "Hocu ovo, tekst na proizvodu: Srecan rodjendan",
