@@ -145,6 +145,18 @@ export async function routeIncomingMessage({
     });
   }
 
+  if (commerce.intent === "payment") {
+    return decision({
+      action: "reply",
+      reply: config.business.paymentReply || "Plaćanje je pouzećem, kuriru pri dostavi. Ako želite da poručite, ostavite nam vaše podatke.",
+      confidence: commerce.confidence,
+      reason: "payment",
+      matched: "payment",
+      profileUpdates,
+      commerce
+    });
+  }
+
   if (commerce.intent === "exchange") {
     return decision({
       action: "reply",

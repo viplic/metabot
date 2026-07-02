@@ -1004,6 +1004,42 @@ test("delivery and production questions use short configured replies before gene
   assert.equal(production.reply, "Rok izrade i isporuke je 2-3 radna dana.");
 });
 
+test("exchange and payment questions use business rules before old knowledge", async () => {
+  const config = await loadConfig();
+  config.business.exchangeReply = "Zamena nije moguća zbog personalizacije proizvoda.";
+  config.business.paymentReply = "Plaćanje je pouzećem, kuriru pri dostavi.";
+  config.automation.rules = [];
+  config.automation.faqs = [];
+  config.knowledge.enabled = true;
+  config.knowledge.documents = [
+    {
+      id: "bad-old-answer",
+      enabled: true,
+      title: "Stari odgovor",
+      keywords: ["zamena", "kartica"],
+      content: "Pošaljite link ili sliku proizvoda pa ćemo proveriti."
+    }
+  ];
+
+  const exchange = await routeIncomingMessage({
+    text: "Da li mogu zamenu?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.equal(exchange.reason, "exchange");
+  assert.equal(exchange.reply, "Zamena nije moguća zbog personalizacije proizvoda.");
+
+  const payment = await routeIncomingMessage({
+    text: "Mogu li platiti karticom?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+  assert.equal(payment.reason, "payment");
+  assert.equal(payment.reply, "Plaćanje je pouzećem, kuriru pri dostavi.");
+});
+
 test("commerce analyzer links product images to catalog price and note metadata", () => {
   const commerce = analyzeCommerceMessage({
     text: "Hocu ovo, tekst na proizvodu: Srecan rodjendan",
