@@ -984,8 +984,14 @@ async function checkMetaHealth() {
     const health = await fetchJson(`/api/tenants/${encodeURIComponent(currentTenantId)}/meta-health`);
     resultEl.innerHTML = (health.channels || []).map((channel) => {
       const label = channel.ok ? "OK" : channel.status === "missing_token" ? "Nedostaje token" : "Token nije validan";
+      const subscriptionText = channel.subscription
+        ? ` Webhook: ${channel.subscription.status || (channel.subscription.ok ? "subscribed" : "nije subscribed")}.`
+        : "";
+      const deliveryText = channel.delivery
+        ? ` Primljeno realnih poruka: ${channel.delivery.realEvents || 0}${channel.delivery.lastRealEventAt ? `, poslednja ${channel.delivery.lastRealEventAt}` : ""}.`
+        : "";
       const detail = channel.ok
-        ? `${channel.metaIdentity?.name || channel.metaIdentity?.id || "Meta profil"} radi.`
+        ? `${channel.metaIdentity?.name || channel.metaIdentity?.id || "Meta profil"} radi.${subscriptionText}${deliveryText}`
         : `${channel.message || "Nalepi novi Page access token i sacuvaj."}`;
       return `<span class="${channel.ok ? "success-text" : "danger-text"}">${escapeHtml(channel.name)}: ${escapeHtml(label)} - ${escapeHtml(detail)}</span>`;
     }).join("");

@@ -927,6 +927,35 @@ test("commerce analyzer extracts free-form order details without labels", () => 
   assert.equal(result.extracted.product.price, "38.90 BAM");
 });
 
+test("price question for inflected product name uses catalog price and CTA", async () => {
+  const config = await loadConfig();
+  config.business.salesCta = "Ako želite da poručite, ostavite nam vaše podatke.";
+  config.catalog = {
+    products: [{
+      name: "Medaljon za graviranje",
+      price: "38.90 BAM",
+      url: "https://starlightnakit.ba/products/medaljon-sa-slikom-personalizovani-medaljon"
+    }]
+  };
+  config.automation.rules = [];
+  config.automation.faqs = [];
+  config.knowledge.documents = [];
+
+  const result = await routeIncomingMessage({
+    text: "Koja je cena medaljona za graviranje?",
+    config,
+    conversation: { profile: {}, messages: [], audit: [] },
+    channelType: "messenger"
+  });
+
+  assert.equal(result.action, "reply");
+  assert.equal(result.reason, "product_price");
+  assert.equal(result.matched, "Medaljon za graviranje");
+  assert.match(result.reply, /38,90 KM/);
+  assert.match(result.reply, /Ako želite da poručite, ostavite nam vaše podatke\./);
+  assert.doesNotMatch(result.reply, /link/i);
+});
+
 test("commerce analyzer does not collect order details for normal price questions", () => {
   const result = analyzeCommerceMessage({
     text: "Zelim samo da znam cenu dostave i da li imate ovu narukvicu?",

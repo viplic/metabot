@@ -100,6 +100,7 @@ function haystackFromTokens(tokens) {
 function tokenize(text) {
   return normalize(text)
     .split(/[^a-z0-9]+/i)
+    .map(stemToken)
     .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
 }
 
@@ -108,6 +109,17 @@ function normalize(value) {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
+}
+
+function stemToken(token) {
+  let text = String(token || "");
+  for (const suffix of ["ovima", "evima", "anje", "enje", "ima", "ama", "om", "em", "og", "oj", "ih", "a", "u", "e", "i"]) {
+    if (text.length - suffix.length >= 4 && text.endsWith(suffix)) {
+      text = text.slice(0, -suffix.length);
+      break;
+    }
+  }
+  return text;
 }
 
 const STOP_WORDS = new Set([

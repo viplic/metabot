@@ -423,7 +423,7 @@ async function handleApi(request, response, url) {
       audit: []
     };
     const result = await routeIncomingMessage({
-      text: body.text || "",
+      text: body.text || body.message || "",
       attachments: body.attachments || [],
       config,
       conversation,
@@ -520,7 +520,7 @@ async function handleClientApi(request, response, url) {
       audit: []
     };
     const result = await routeIncomingMessage({
-      text: body.text || "",
+      text: body.text || body.message || "",
       attachments: body.attachments || [],
       config,
       conversation,
@@ -634,7 +634,7 @@ async function handleTenantApi(request, response, url, route) {
       audit: []
     };
     const result = await routeIncomingMessage({
-      text: body.text || "",
+      text: body.text || body.message || "",
       attachments: body.attachments || [],
       config,
       conversation,
@@ -710,6 +710,7 @@ async function handleLearningApi(request, response, url, route) {
 async function checkTenantMetaHealth(tenantId) {
   const config = await loadTenantConfig(tenantId);
   const version = config.meta?.graphApiVersion || "v25.0";
+  const webhookDeliveries = summarizeWebhookDeliveries(await loadRawEvents(tenantId, 80));
 
   const channels = await Promise.all((config.channels || []).map(async (channel) => {
     const { accessToken, source } = getPageAccessToken(config, channel);
@@ -752,6 +753,7 @@ async function checkTenantMetaHealth(tenantId) {
         ok: true,
         status: "ok",
         subscription,
+        delivery: webhookDeliveries[channel.type] || { realEvents: 0, lastRealEventAt: null },
         metaIdentity: {
           id: body.id || "",
           name: body.name || ""
@@ -797,6 +799,30 @@ async function checkPageWebhookSubscription({ version, pageId, pageAccessToken }
   } catch (error) {
     return { ok: false, status: "check_failed", message: error.message };
   }
+}
+
+function summarizeWebhookDeliveries(rawEvents = []) {
+  const summary = {
+    messenger: { realEvents: 0, lastRealEventAt: null },
+    instagram: { realEvents: 0, lastRealEventAt: null }
+  };
+
+  for (const rawEvent of rawEvents) {
+    const payload = rawEvent.payload?.payload || rawEvent.payload || {};
+    for (const event of normalizeMetaPayload(payload)) {
+      if (isSyntheticWebhookSender(event.senderId)) continue;
+      const type = event.channelType === "instagram" ? "instagram" : "messenger";
+      summary[type].realEvents += 1;
+      summary[type].lastRealEventAt ||= rawEvent.receivedAt || null;
+    }
+  }
+
+  return summary;
+}
+
+function isSyntheticWebhookSender(senderId = "") {
+  const value = String(senderId || "");
+  return !/^\d{5,}$/.test(value) || /(^|[-_])(selftest|smoke|test)([-_]|$)/i.test(value);
 }
 
 async function startTenantMetaOAuth(tenantId, request) {
@@ -1004,7 +1030,10 @@ async function connectTenantMetaPage(tenantId, body = {}) {
     },
     instagramBusinessAccount: instagramId ? { id: instagramId } : null,
     subscription,
-    warning: [exchangeWarning, subscription.ok ? "" : subscription.message].filter(Boolean).join(" "),
+    warning: [
+      exchangeWarning,
+      subscription.ok ? "" : subscription.message
+    ].filter(Boolean).join(" "),
     learning,
     config: publicConfig(saved)
   };

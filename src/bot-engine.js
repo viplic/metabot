@@ -97,12 +97,12 @@ export async function routeIncomingMessage({
     });
   }
 
-  if (commerce.extracted?.product?.name && hasImageAttachment(attachments) && isPriceQuestion(cleanText)) {
+  if (commerce.extracted?.product?.name && isPriceQuestion(cleanText) && commerce.extracted.product.price) {
     return decision({
       action: "reply",
       reply: formatProductPriceReply(commerce.extracted.product, config),
       confidence: commerce.extracted.product.matchConfidence || 0.86,
-      reason: "image_product_price",
+      reason: hasImageAttachment(attachments) ? "image_product_price" : "product_price",
       matched: commerce.extracted.product.name,
       profileUpdates,
       commerce

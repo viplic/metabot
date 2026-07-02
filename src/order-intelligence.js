@@ -232,7 +232,22 @@ function extractCity(text) {
 
 function findMentionedProduct(text, catalog) {
   const lower = normalize(text);
-  return (catalog.products || []).find((product) => product.name && lower.includes(normalize(product.name))) || null;
+  const queryTokens = new Set(matchTokens(text));
+  let best = null;
+  for (const product of catalog.products || []) {
+    if (!product.name) continue;
+    const normalizedName = normalize(product.name);
+    if (lower.includes(normalizedName)) return product;
+
+    const productTokens = matchTokens(product.name);
+    if (!productTokens.length) continue;
+    const hits = productTokens.filter((token) => queryTokens.has(token)).length;
+    const score = hits / productTokens.length;
+    if (hits >= 2 && score >= 0.45 && (!best || score > best.score)) {
+      best = { product, score };
+    }
+  }
+  return best?.product || null;
 }
 
 function findProductFromAttachments(attachments = [], catalog = {}) {
@@ -319,3 +334,37 @@ function tokenOverlap(left, right) {
   const hits = left.filter((token) => rightSet.has(token)).length;
   return hits / Math.max(left.length, right.length);
 }
+
+function matchTokens(value) {
+  return normalize(value)
+    .split(/[^a-z0-9]+/i)
+    .map(stemToken)
+    .filter((token) => token.length >= 4 && !PRODUCT_STOP_WORDS.has(token));
+}
+
+function stemToken(token) {
+  let text = String(token || "");
+  for (const suffix of ["ovima", "evima", "anje", "enje", "ima", "ama", "om", "em", "og", "oj", "ih", "a", "u", "e", "i"]) {
+    if (text.length - suffix.length >= 4 && text.endsWith(suffix)) {
+      text = text.slice(0, -suffix.length);
+      break;
+    }
+  }
+  return text;
+}
+
+const PRODUCT_STOP_WORDS = new Set([
+  "koja",
+  "koji",
+  "koje",
+  "koliko",
+  "cena",
+  "cijena",
+  "kosta",
+  "price",
+  "proizvod",
+  "personalizovan",
+  "personalizovana",
+  "slikom",
+  "slika"
+]);

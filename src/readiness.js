@@ -8,6 +8,7 @@ export function evaluateReadiness(config) {
   const appSecret = getAppSecret(config);
 
   checks.push(check("admin_token", isRealSecret(adminToken, "change-this-admin-token"), "ADMIN_TOKEN is required before public exposure."));
+  checks.push(check("secret_encryption_key", isRealSecret(process.env.SECRET_ENCRYPTION_KEY || process.env.DATA_ENCRYPTION_KEY), "SECRET_ENCRYPTION_KEY must be set so stored Meta/API tokens survive admin password changes."));
   checks.push(check("graph_api_version", /^v\d+\.\d+$/.test(config.meta.graphApiVersion || ""), "Graph API version must be pinned, e.g. v25.0."));
   checks.push(check("verify_token", getVerifyToken(config) !== "change-this-token", "META_VERIFY_TOKEN must be changed."));
   checks.push(check("webhook_signature", shouldRequireSignature(config), "META_REQUIRE_SIGNATURE should be true."));
