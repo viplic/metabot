@@ -285,6 +285,62 @@ a.button-link.primary {
   line-height: 1.5;
 }
 
+.setup-checklist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.setup-checklist article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.setup-checklist article span {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: #052e20;
+  background: #34d399;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.setup-checklist article.is-missing span {
+  color: #451a03;
+  background: #fbbf24;
+}
+
+.setup-checklist article small {
+  grid-column: 2;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.guide-note {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.guide-note span {
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
 .landing-signup {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
@@ -1607,6 +1663,7 @@ dd {
   .learning-grid,
   .landing-steps,
   .setup-flow,
+  .setup-checklist,
   .wizard-grid {
     grid-template-columns: 1fr !important;
   }

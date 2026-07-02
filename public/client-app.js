@@ -186,6 +186,21 @@ function renderBusiness() {
   config.integrations.googleSheets ||= {};
   config.usage ||= {};
   panels.business.innerHTML = section(
+    "Sta popuniti prvo",
+    `<div class="setup-checklist">
+      ${clientSetupStep("1. Opis", Boolean(config.business.shortDescription), "Sta prodajete, kome, materijal, garancija i ton komunikacije.")}
+      ${clientSetupStep("2. Sajt", Boolean(config.catalog.sourceUrl), "URL shopa da automatizacija ucita proizvode, slike i cene.")}
+      ${clientSetupStep("3. Dostava", hasKnowledgeText(["dostava", "isporuka", "rok"]), "Cena dostave, drzave/gradovi i rok izrade/isporuke.")}
+      ${clientSetupStep("4. Reklamacije", hasKnowledgeText(["reklamacija", "zamena", "osteceno"]), "Sta radite kada paket kasni, proizvod je ostecen ili kupac trazi zamenu.")}
+      ${clientSetupStep("5. Porudzbine", Boolean(config.integrations.googleSheets.webhookUrl), "Google Sheet webhook gde se upisuju porudzbine.")}
+      ${clientSetupStep("6. Test", Boolean(conversations.length), "Posaljite probna pitanja za cenu, dostavu, sliku i porudzbinu.")}
+    </div>
+    <div class="guide-note">
+      <strong>Pravilo za bolje odgovore:</strong>
+      <span>Pisite kratko i konkretno: cena, rok, dostava, materijal, garancija, sta nije moguce i koje podatke kupac ostavlja za porudzbinu.</span>
+    </div>`
+  );
+  panels.business.insertAdjacentHTML("beforeend", section(
     "Niche i poslovni podaci",
     `<div class="grid">
       ${textField("Naziv", config.business.name, (value) => (config.business.name = value))}
@@ -202,7 +217,7 @@ function renderBusiness() {
       ${textField("Google Sheet webhook URL za porudzbine", config.integrations.googleSheets.webhookUrl, (value) => (config.integrations.googleSheets.webhookUrl = value), "full")}
       ${textField("Google Sheet pregledni link", config.integrations.googleSheets.sheetUrl, (value) => (config.integrations.googleSheets.sheetUrl = value), "full")}
     </div>`
-  );
+  ));
   panels.business.insertAdjacentHTML(
     "beforeend",
     section(
@@ -228,6 +243,23 @@ function renderBusiness() {
     setSaved(`Ucitan sajt: ${result.products} proizvoda`, true);
     renderAll();
   });
+}
+
+function clientSetupStep(title, ok, text) {
+  return `<article class="${ok ? "is-ok" : "is-missing"}">
+    <span>${ok ? "OK" : "!"}</span>
+    <strong>${escapeHtml(title)}</strong>
+    <small>${escapeHtml(text)}</small>
+  </article>`;
+}
+
+function hasKnowledgeText(words = []) {
+  const haystack = [
+    config.business?.shortDescription,
+    config.business?.defaultReply,
+    ...(config.knowledge?.documents || []).flatMap((document) => [document.title, document.content, document.response, ...(document.keywords || [])])
+  ].join(" ").toLowerCase();
+  return words.some((word) => haystack.includes(word));
 }
 
 function renderChannels() {
@@ -257,6 +289,13 @@ function channelItem(channel) {
 
 function renderKnowledge() {
   panels.knowledge.innerHTML = section(
+    "Kako da automatizacija zna bolje",
+    `<div class="guide-note">
+      <strong>Unesite po jedan dokument za svaku temu.</strong>
+      <span>Najbolje radi kada su teme odvojene: cene proizvoda, dostava, placanje, reklamacije, materijali, garancija i porucivanje. Direktan odgovor koristite kada zelite da odgovor bude skoro uvek isti.</span>
+    </div>`
+  );
+  panels.knowledge.insertAdjacentHTML("beforeend", section(
     "Odgovori i baza znanja",
     `<div class="grid three">
       ${checkboxField("Baza znanja uključena", config.knowledge.enabled, (value) => (config.knowledge.enabled = value))}
@@ -269,7 +308,7 @@ function renderKnowledge() {
     <p class="muted">Stari razgovori se analiziraju samo za ovaj biznis i služe za predloge odgovora koje admin odobrava.</p>
     <div class="collection">${config.knowledge.documents.map(knowledgeItem).join("")}</div>
     <div class="actions"><button id="addKnowledge">Dodaj dokument</button></div>`
-  );
+  ));
   bindInputs(panels.knowledge);
   panels.knowledge.querySelector("#addKnowledge").addEventListener("click", () => {
     config.knowledge.documents.push({

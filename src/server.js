@@ -793,14 +793,16 @@ async function checkTenantMetaHealth(tenantId) {
 
       const subscription = channel.type === "messenger"
         ? await checkPageWebhookSubscription({ version, pageId: channel.pageId || body.id, pageAccessToken: accessToken })
-        : null;
+        : await checkPageWebhookSubscription({ version, pageId: channel.pageId || body.id, pageAccessToken: accessToken });
+      const delivery = webhookDeliveries[channel.type] || { realEvents: 0, lastRealEventAt: null };
 
       return {
         ...base,
         ok: true,
         status: "ok",
         subscription,
-        delivery: webhookDeliveries[channel.type] || { realEvents: 0, lastRealEventAt: null },
+        delivery,
+        deliveryAdvice: buildMetaDeliveryAdvice(channel, subscription, delivery),
         metaIdentity: {
           id: body.id || "",
           name: body.name || ""
@@ -821,6 +823,19 @@ async function checkTenantMetaHealth(tenantId) {
     checkedAt: new Date().toISOString(),
     channels
   };
+}
+
+function buildMetaDeliveryAdvice(channel, subscription, delivery) {
+  if (!channel.sendEnabled) return "Slanje je iskljuceno za ovaj kanal.";
+  if (subscription && subscription.ok === false) {
+    return "Token radi, ali stranica nije subscribed na webhook. U Meta Messenger/Instagram setup dodaj subscription fields messages i messaging_postbacks.";
+  }
+  if (!delivery?.realEvents) {
+    return channel.type === "instagram"
+      ? "Token je OK, ali NibaChat jos nije video realan Instagram DM. Posalji novu DM poruku sa naloga koji nije vlasnik/admin i proveri da Instagram nalog nije privatni creator bez business veze."
+      : "Token je OK, ali NibaChat jos nije video realnu Messenger poruku. Posalji novu poruku sa naloga koji nije vlasnik/admin stranice.";
+  }
+  return "";
 }
 
 async function checkPageWebhookSubscription({ version, pageId, pageAccessToken }) {

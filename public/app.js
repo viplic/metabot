@@ -637,6 +637,7 @@ function renderBusiness() {
 
 function renderConnection() {
   panels.channels.innerHTML = "";
+  renderSetupGuide(panels.channels);
   renderAiSettings(panels.channels);
   renderChannels({ append: true });
   panels.channels.insertAdjacentHTML(
@@ -660,7 +661,7 @@ function renderConnection() {
         <button id="startMetaOAuth" class="primary">Povezi preko Facebook login-a</button>
         <button id="connectMetaPage">Obnovi Page token rucno</button>
       </div>
-      <div id="metaConnectResult" class="test-result"><span>Koristi ovo kada token prestane da salje poruke.</span></div>`
+      <div id="metaConnectResult" class="test-result"><span>Prvo koristi zeleno dugme. Rucni token je samo rezervna opcija kada Meta ponisti dozvole.</span></div>`
     )
   );
   panels.channels.insertAdjacentHTML(
@@ -674,6 +675,67 @@ function renderConnection() {
   panels.channels.querySelector("#startMetaOAuth").addEventListener("click", startMetaOAuth);
   panels.channels.querySelector("#connectMetaPage").addEventListener("click", connectMetaPage);
   panels.channels.querySelector("#checkMetaHealth").addEventListener("click", checkMetaHealth);
+}
+
+function renderSetupGuide(target) {
+  const messenger = config.channels.find((channel) => channel.type === "messenger");
+  const instagram = config.channels.find((channel) => channel.type === "instagram");
+  const hasAi = Boolean(config.ai?.hasApiKey || config.ai?.apiKeyValue || config.ai?.apiKeyEnv);
+  const hasMetaLogin = Boolean(config.meta?.appId && config.meta?.businessLoginConfigId && config.meta?.hasAppSecret);
+  const hasPage = Boolean(messenger?.pageId || instagram?.pageId);
+  const hasIg = Boolean(instagram?.igAccountId);
+  const hasKnowledge = Boolean((config.knowledge?.documents || []).some((document) => document.enabled && (document.content || document.response)));
+  const hasSheet = Boolean(config.integrations?.googleSheets?.enabled && config.integrations.googleSheets.webhookUrl);
+  const steps = [
+    {
+      title: "1. Osnovno",
+      ok: Boolean(config.business?.name && config.business?.description),
+      text: "Naziv, opis shopa, drzava, dostava i rokovi."
+    },
+    {
+      title: "2. AI",
+      ok: hasAi,
+      text: "OpenAI kljuc i kratak sistemski stil odgovora."
+    },
+    {
+      title: "3. Meta",
+      ok: hasMetaLogin && hasPage,
+      text: "App ID, App secret, login konfiguracija i Facebook stranica."
+    },
+    {
+      title: "4. Instagram",
+      ok: hasIg,
+      text: "IG business ID povezan sa istom Facebook stranicom."
+    },
+    {
+      title: "5. Znanje",
+      ok: hasKnowledge,
+      text: "Cene, dostava, reklamacije, materijali i najcesca pitanja."
+    },
+    {
+      title: "6. Sheet",
+      ok: hasSheet,
+      text: "Google Apps Script /exec URL za porudzbine."
+    }
+  ];
+
+  target.insertAdjacentHTML(
+    "beforeend",
+    section(
+      "Setup vodič",
+      `<div class="setup-checklist">
+        ${steps.map((step) => `<article class="${step.ok ? "is-ok" : "is-missing"}">
+          <span>${step.ok ? "OK" : "!"}</span>
+          <strong>${escapeHtml(step.title)}</strong>
+          <small>${escapeHtml(step.text)}</small>
+        </article>`).join("")}
+      </div>
+      <div class="guide-note">
+        <strong>Najbrzi redosled:</strong>
+        <span>Popuni osnovno, ubaci AI kljuc, klikni Facebook login, proveri Meta tokene, zatim testiraj pitanja: cena, dostava, rok, reklamacija i porudzbina.</span>
+      </div>`
+    )
+  );
 }
 
 function renderChannels({ append = false } = {}) {
@@ -742,6 +804,9 @@ function renderChannels({ append = false } = {}) {
 }
 
 function channelItem(channel) {
+  const channelHelp = channel.type === "instagram"
+    ? "Za Instagram unesi isti Page ID kao Facebook stranicu i IG Account ID iz Business Suite/Graph API. Token moze biti isti Page token."
+    : "Za Messenger unesi Facebook Page ID. Token se najlakse popunjava preko dugmeta Povezi preko Facebook login-a.";
   return `<article class="item">
     <div class="item-header">
       <h3>${escapeHtml(channel.name)}</h3>
@@ -755,6 +820,7 @@ function channelItem(channel) {
       ${textField("Page ID", channel.pageId, (value) => (channel.pageId = value))}
       ${textField("IG Account ID", channel.igAccountId, (value) => (channel.igAccountId = value))}
       ${secretField("Page access token za ovaj kanal", channel.pageAccessTokenValue, Boolean(channel.hasPageAccessToken), (value) => (channel.pageAccessTokenValue = value), "full")}
+      <p class="muted full-span">${escapeHtml(channelHelp)}</p>
     </div>
   </article>`;
 }
@@ -1006,7 +1072,7 @@ async function checkMetaHealth() {
         ? ` Primljeno realnih poruka: ${channel.delivery.realEvents || 0}${channel.delivery.lastRealEventAt ? `, poslednja ${channel.delivery.lastRealEventAt}` : ""}.`
         : "";
       const detail = channel.ok
-        ? `${channel.metaIdentity?.name || channel.metaIdentity?.id || "Meta profil"} radi.${subscriptionText}${deliveryText}`
+        ? `${channel.metaIdentity?.name || channel.metaIdentity?.id || "Meta profil"} radi.${subscriptionText}${deliveryText}${channel.deliveryAdvice ? ` ${channel.deliveryAdvice}` : ""}`
         : `${channel.message || "Nalepi novi Page access token i sacuvaj."}`;
       return `<span class="${channel.ok ? "success-text" : "danger-text"}">${escapeHtml(channel.name)}: ${escapeHtml(label)} - ${escapeHtml(detail)}</span>`;
     }).join("");
