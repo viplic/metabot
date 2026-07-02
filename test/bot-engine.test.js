@@ -866,6 +866,35 @@ test("Instagram payloads prefer the Instagram channel over a matching Messenger 
   assert.equal(channel.id, "instagram");
 });
 
+test("Instagram channel matches when Meta sends the linked Facebook page as recipient", async () => {
+  const { findChannel } = await import("../src/meta-client.js");
+  const config = {
+    channels: [
+      {
+        id: "messenger",
+        type: "messenger",
+        enabled: true,
+        pageId: "page-1"
+      },
+      {
+        id: "instagram",
+        type: "instagram",
+        enabled: true,
+        pageId: "page-1",
+        igAccountId: "ig-1"
+      }
+    ]
+  };
+
+  const channel = findChannel(config, {
+    channelType: "instagram",
+    pageId: "page-1",
+    recipientId: "page-1"
+  });
+
+  assert.equal(channel.id, "instagram");
+});
+
 test("commerce analyzer detects incomplete orders and missing fields", () => {
   const result = analyzeCommerceMessage({
     text: "Hocu da porucim crvenu majicu, telefon 064 123 4567",

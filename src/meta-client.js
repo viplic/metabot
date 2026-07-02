@@ -214,6 +214,10 @@ export function getPageAccessToken(config, channel = {}) {
 }
 
 export function findChannel(config, incoming) {
+  const pageOrRecipientMatches = (channel) =>
+    (channel.pageId && (channel.pageId === incoming.pageId || channel.pageId === incoming.recipientId)) ||
+    (channel.igAccountId && (channel.igAccountId === incoming.pageId || channel.igAccountId === incoming.recipientId));
+
   if (incoming.channelType === "instagram") {
     const instagramChannel = config.channels.find(
       (channel) =>
@@ -221,8 +225,7 @@ export function findChannel(config, incoming) {
         channel.type === "instagram" &&
         (
           !channel.igAccountId ||
-          channel.igAccountId === incoming.pageId ||
-          channel.igAccountId === incoming.recipientId
+          pageOrRecipientMatches(channel)
         )
     );
     if (instagramChannel) return instagramChannel;
