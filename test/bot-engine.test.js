@@ -415,7 +415,7 @@ test("unavailable image attachments do not force handoff", async () => {
               content: [
                 {
                   type: "output_text",
-                  text: "Pošaljite naziv proizvoda ili novu sliku, pa proveravam cenu."
+                  text: "Napišite naziv proizvoda ili pošaljite sliku, pa proveravam cenu."
                 }
               ]
             }
@@ -475,6 +475,8 @@ test("unavailable image attachments do not force handoff", async () => {
     assert.equal(result.action, "reply");
     assert.equal(result.reason, "ai_fallback");
     assert.notEqual(result.action, "handoff");
+    assert.match(result.reply, /jasniju sliku/);
+    assert.doesNotMatch(result.reply, /pošaljite sliku/);
     assert.equal(calls.some((call) => call.url === "https://api.openai.com/v1/responses"), true);
   } finally {
     globalThis.fetch = originalFetch;

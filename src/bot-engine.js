@@ -203,7 +203,11 @@ export async function routeIncomingMessage({
       knowledgeMatches
     });
     if (aiDecision) {
-      return decision({ ...aiDecision, profileUpdates });
+      return decision({
+        ...aiDecision,
+        reply: polishImageAwareReply(aiDecision.reply, attachments),
+        profileUpdates
+      });
     }
   }
 
@@ -266,7 +270,11 @@ export async function routeIncomingMessage({
       knowledgeMatches
     });
     if (aiDecision) {
-      return decision({ ...aiDecision, profileUpdates });
+      return decision({
+        ...aiDecision,
+        reply: polishImageAwareReply(aiDecision.reply, attachments),
+        profileUpdates
+      });
     }
   }
 
@@ -378,6 +386,13 @@ function decision(payload) {
 
 function hasImageAttachment(attachments = []) {
   return attachments.some((attachment) => attachment.type === "image" || String(attachment.mimeType || "").startsWith("image/"));
+}
+
+function polishImageAwareReply(reply, attachments = []) {
+  if (!hasImageAttachment(attachments)) return reply;
+  return String(reply || "")
+    .replace(/ili\s+po[šs]aljite\s+(nam\s+)?sliku/gi, "ili pošaljite jasniju sliku")
+    .replace(/po[šs]aljite\s+(nam\s+)?sliku/gi, "pošaljite jasniju sliku");
 }
 
 function isPriceQuestion(text) {
