@@ -241,7 +241,7 @@ async function buildOpenAiImageParts(attachments, config) {
 
   const parts = [];
   for (const attachment of imageAttachments) {
-    const imageUrl = await fetchImageAsDataUrl(attachment, config);
+    const imageUrl = await safeFetchImageAsDataUrl(attachment, config);
     if (imageUrl) {
       parts.push({
         type: "input_image",
@@ -308,10 +308,28 @@ async function buildGeminiImageParts(attachments, config) {
 
   const parts = [];
   for (const attachment of imageAttachments) {
-    const inlineData = await fetchImageAsInlineData(attachment, config);
+    const inlineData = await safeFetchImageAsInlineData(attachment, config);
     if (inlineData) parts.push({ inlineData });
   }
   return parts;
+}
+
+async function safeFetchImageAsInlineData(attachment, config) {
+  try {
+    return await fetchImageAsInlineData(attachment, config);
+  } catch (error) {
+    console.warn(`Skipping image attachment for Gemini fallback: ${error.message}`);
+    return null;
+  }
+}
+
+async function safeFetchImageAsDataUrl(attachment, config) {
+  try {
+    return await fetchImageAsDataUrl(attachment, config);
+  } catch (error) {
+    console.warn(`Skipping image attachment for OpenAI fallback: ${error.message}`);
+    return null;
+  }
 }
 
 async function fetchImageAsInlineData(attachment, config) {
