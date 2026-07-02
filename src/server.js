@@ -780,8 +780,7 @@ async function checkTenantMetaHealth(tenantId) {
       const url = new URL(`https://graph.facebook.com/${version}/me`);
       url.searchParams.set("fields", "id,name");
       url.searchParams.set("access_token", accessToken);
-      const response = await fetchWithTimeout(url, {}, 8000);
-      const body = await response.json().catch(() => ({}));
+      const { response, body } = await fetchMetaHealthJson(url);
       if (!response.ok) {
         return {
           ...base,
@@ -829,8 +828,7 @@ async function checkPageWebhookSubscription({ version, pageId, pageAccessToken }
   const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}/subscribed_apps`);
   url.searchParams.set("access_token", pageAccessToken);
   try {
-    const response = await fetchWithTimeout(url, {}, 8000);
-    const body = await response.json().catch(() => ({}));
+    const { response, body } = await fetchMetaHealthJson(url);
     if (!response.ok) {
       return {
         ok: false,
@@ -847,6 +845,30 @@ async function checkPageWebhookSubscription({ version, pageId, pageAccessToken }
   } catch (error) {
     return { ok: false, status: "check_failed", message: error.message };
   }
+}
+
+async function fetchMetaHealthJson(url, attempts = 3) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url, {}, 8000);
+      const body = await response.json().catch(() => ({}));
+      const isTransient = response.status === 429 || response.status >= 500;
+      if (response.ok || !isTransient || attempt === attempts) return { response, body };
+      await delay(250 * attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) throw error;
+      await delay(250 * attempt);
+    }
+  }
+
+  throw lastError || new Error("Meta health check failed");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function summarizeWebhookDeliveries(rawEvents = []) {
