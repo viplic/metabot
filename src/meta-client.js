@@ -214,6 +214,27 @@ export function getPageAccessToken(config, channel = {}) {
 }
 
 export function findChannel(config, incoming) {
+  if (incoming.channelType === "instagram") {
+    const instagramChannel = config.channels.find(
+      (channel) =>
+        channel.enabled &&
+        channel.type === "instagram" &&
+        (
+          !channel.igAccountId ||
+          channel.igAccountId === incoming.pageId ||
+          channel.igAccountId === incoming.recipientId
+        )
+    );
+    if (instagramChannel) return instagramChannel;
+  }
+
+  if (incoming.channelType === "messenger") {
+    const messengerChannel = config.channels.find(
+      (channel) => channel.enabled && channel.type === "messenger" && channel.pageId && channel.pageId === incoming.pageId
+    );
+    if (messengerChannel) return messengerChannel;
+  }
+
   const exactPage = config.channels.find(
     (channel) => channel.enabled && channel.pageId && channel.pageId === incoming.pageId
   );

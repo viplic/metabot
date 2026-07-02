@@ -64,6 +64,7 @@ import {
   deleteCustomerData,
   findOrCreateConversation,
   loadConversations,
+  loadRawEvents,
   markEventIfNew,
   pruneRawEvents,
   pruneExpiredConversations,
@@ -587,6 +588,11 @@ async function handleTenantApi(request, response, url, route) {
 
   if (request.method === "GET" && route.resource === "meta-health") {
     return sendJson(response, 200, await checkTenantMetaHealth(tenantId));
+  }
+
+  if (request.method === "GET" && route.resource === "raw-events") {
+    const limit = Number(url.searchParams.get("limit") || 50);
+    return sendJson(response, 200, await loadRawEvents(tenantId, limit));
   }
 
   if (request.method === "GET" && route.resource === "meta-oauth-start") {
@@ -1661,7 +1667,7 @@ function tenantIdFromWebhookPath(pathname) {
 }
 
 function matchTenantApiRoute(pathname) {
-  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|meta-connect|meta-oauth-start)$/);
+  const match = pathname.match(/^\/api\/tenants\/([^/]+)\/(config|conversations|test-message|access|store|sync-site|meta-health|raw-events|meta-connect|meta-oauth-start)$/);
   if (!match) return null;
   return {
     tenantId: normalizeTenantId(match[1]),

@@ -91,6 +91,49 @@ export async function appendRawEvent(event) {
   await fs.appendFile(RAW_EVENTS_PATH, `${JSON.stringify(event)}\n`, "utf8");
 }
 
+export async function loadRawEvents(tenantId = DEFAULT_TENANT_ID, limit = 50) {
+  const normalizedTenantId = normalizeTenantId(tenantId);
+  const maxRows = Math.max(1, Math.min(200, Number(limit || 50)));
+  if (hasDatabase()) {
+    const sql = await getSql();
+    const rows = await sql`
+      SELECT tenant_id, platform_user_id, payload, received_at
+      FROM raw_events
+      WHERE tenant_id = ${normalizedTenantId}
+      ORDER BY received_at DESC
+      LIMIT ${maxRows}
+    `;
+    return rows.map((row) => ({
+      tenantId: row.tenant_id,
+      platformUserId: row.platform_user_id,
+      payload: row.payload,
+      receivedAt: row.received_at
+    }));
+  }
+
+  let raw = "";
+  try {
+    raw = await fs.readFile(RAW_EVENTS_PATH, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+
+  return raw
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter((event) => event?.tenantId === normalizedTenantId)
+    .slice(-maxRows)
+    .reverse();
+}
+
 export async function markEventIfNew(eventId, ttlHours = 48, tenantId = DEFAULT_TENANT_ID) {
   if (!eventId) return true;
 
